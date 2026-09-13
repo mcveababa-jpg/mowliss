@@ -1,0 +1,29 @@
+# Secrets / local environment
+.env
+
+# Editor / agent-local metadata
+.vscode/
+.claude/
+.idea/
+
+# Unrelated cloned third-party project (not part of MoWLiSS)
+Malware-Scanner/
+
+# Python build artifacts
+__pycache__/
+*.pyc
+*/build/
+*/dist/
+*.spec
+
+# Compiled executables (rebuild from source instead of committing binaries)
+*.exe
+MOWLISS APK Files/
+
+# Stray dev/test artifacts and session cookie jars
+*.cookies.txt
+cookies.txt
+*_cookie.txt
+admin_test*.txt
+admin_dashboard_check*.txt
+admin_view_check.txt

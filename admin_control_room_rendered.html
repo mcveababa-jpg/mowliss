@@ -1,0 +1,172 @@
+
+Warning: Undefined array key "REQUEST_METHOD" in C:\Users\00208\Desktop\Test\admin_control_room.php on line 26
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Room | MoWLiSS</title>
+    <link rel="stylesheet" href="style.css?v=5">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-sA+e2H5f6b0n7g2vJp3s3w5xv1Xo4p+X2h6v7g2JtkA=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-o9N1j8bN7k6s7Q0b2R1x4w6v9s8y5Z2h3j4k5l6m7n8=" crossorigin=""></script>
+</head>
+<body>
+<div class="container">
+    <div class="dashboard-top">
+        <div>
+            <h1>MoWLiSS Dashboard</h1>
+            <p class="small">Control Room</p>
+        </div>
+        <div>
+            <a class="btn" style="display:inline-block; width:auto; text-decoration:none;" href="admin_dashboard.php">Back to Admin</a>
+        </div>
+    </div>
+
+    
+    <div class="dashboard-card">
+        <h2>McVea Baba — Student Account</h2>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><th>Account Type</th><td>Student</td></tr>
+                    <tr><th>Account ID</th><td>00208</td></tr>
+                    <tr><th>Online Status</th><td><span class="status-badge pending">Offline</span></td></tr>
+                    <tr><th>Device Status</th><td>healthy</td></tr>
+                    <tr><th>Last Seen</th><td>Never</td></tr>
+                    <tr><th>Location</th><td>Sydney Sample</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="dashboard-card">
+        <h2>App Controls</h2>
+        <div class="control-grid">
+                                            <form method="POST" class="admin-control-form">
+                    <input type="hidden" name="action" value="control_action">
+                    <input type="hidden" name="role" value="students">
+                    <input type="hidden" name="user_id" value="3">
+                    <input type="hidden" name="control_name" value="website_blocker">
+                    <input type="hidden" name="enabled" value="0">
+                    <button type="submit" class="control-btn on">Website Blocker</button>
+                    <span class="status-badge approved">ON</span>
+                </form>
+                                            <form method="POST" class="admin-control-form">
+                    <input type="hidden" name="action" value="control_action">
+                    <input type="hidden" name="role" value="students">
+                    <input type="hidden" name="user_id" value="3">
+                    <input type="hidden" name="control_name" value="remote_lock">
+                    <input type="hidden" name="enabled" value="0">
+                    <button type="submit" class="control-btn on">Remote Lock</button>
+                    <span class="status-badge approved">ON</span>
+                </form>
+                                            <form method="POST" class="admin-control-form">
+                    <input type="hidden" name="action" value="control_action">
+                    <input type="hidden" name="role" value="students">
+                    <input type="hidden" name="user_id" value="3">
+                    <input type="hidden" name="control_name" value="live_location">
+                    <input type="hidden" name="enabled" value="0">
+                    <button type="submit" class="control-btn on">Live Location</button>
+                    <span class="status-badge approved">ON</span>
+                </form>
+                                            <form method="POST" class="admin-control-form">
+                    <input type="hidden" name="action" value="control_action">
+                    <input type="hidden" name="role" value="students">
+                    <input type="hidden" name="user_id" value="3">
+                    <input type="hidden" name="control_name" value="url_scanner_activation">
+                    <input type="hidden" name="enabled" value="0">
+                    <button type="submit" class="control-btn on">URL Scanner Activation</button>
+                    <span class="status-badge approved">ON</span>
+                </form>
+                                            <form method="POST" class="admin-control-form">
+                    <input type="hidden" name="action" value="control_action">
+                    <input type="hidden" name="role" value="students">
+                    <input type="hidden" name="user_id" value="3">
+                    <input type="hidden" name="control_name" value="app_turn_off">
+                    <input type="hidden" name="enabled" value="1">
+                    <button type="submit" class="control-btn off">App Turn Off</button>
+                    <span class="status-badge pending">OFF</span>
+                </form>
+                                            <form method="POST" class="admin-control-form">
+                    <input type="hidden" name="action" value="control_action">
+                    <input type="hidden" name="role" value="students">
+                    <input type="hidden" name="user_id" value="3">
+                    <input type="hidden" name="control_name" value="app_turn_on">
+                    <input type="hidden" name="enabled" value="0">
+                    <button type="submit" class="control-btn on">App Turn On</button>
+                    <span class="status-badge approved">ON</span>
+                </form>
+                                            <form method="POST" class="admin-control-form">
+                    <input type="hidden" name="action" value="control_action">
+                    <input type="hidden" name="role" value="students">
+                    <input type="hidden" name="user_id" value="3">
+                    <input type="hidden" name="control_name" value="app_delete">
+                    <input type="hidden" name="enabled" value="1">
+                    <button type="submit" class="control-btn off">App Delete</button>
+                    <span class="status-badge pending">OFF</span>
+                </form>
+                                            <form method="POST" class="admin-control-form">
+                    <input type="hidden" name="action" value="control_action">
+                    <input type="hidden" name="role" value="students">
+                    <input type="hidden" name="user_id" value="3">
+                    <input type="hidden" name="control_name" value="app_killswitch">
+                    <input type="hidden" name="enabled" value="0">
+                    <button type="submit" class="control-btn on">App Kill Switch</button>
+                    <span class="status-badge approved">ON</span>
+                </form>
+                    </div>
+    </div>
+
+    <div class="dashboard-card">
+        <h2>Live Devices Map</h2>
+        <div id="admin-map" style="width:100%; height:480px; border-radius:12px; overflow:hidden;"></div>
+        <script>
+            (function(){
+                const devices = [{"role":"students","id":3,"name":"McVea Baba","label":"Sydney Sample","device_status":"healthy","lat":-33.8688,"lng":151.2093},{"role":"staff","id":1,"name":"Jane Staff","label":"Brisbane Sample","device_status":"healthy","lat":-27.4698,"lng":153.0251},{"role":"foremen","id":1,"name":"Ben Foreman","label":"Port Moresby Sample","device_status":"healthy","lat":-9.4438,"lng":147.1803}] || [];
+
+                // initialize map
+                const mapEl = document.getElementById('admin-map');
+                const map = L.map(mapEl).setView([0,0], 2);
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; OpenStreetMap contributors'
+                }).addTo(map);
+
+                function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+                if (devices.length === 0) {
+                    mapEl.innerHTML = '<div class="map-placeholder">No live locations available for any devices yet.</div>';
+                    return;
+                }
+
+                const bounds = [];
+                devices.forEach(d => {
+                    const lat = parseFloat(d.lat);
+                    const lng = parseFloat(d.lng);
+                    if (isNaN(lat) || isNaN(lng)) return;
+
+                    const marker = L.marker([lat, lng]).addTo(map);
+                    const popup = '<strong>' + escapeHtml(d.name) + '</strong><br/>' +
+                                  'Role: ' + escapeHtml(d.role) + '<br/>' +
+                                  'Status: ' + escapeHtml(d.device_status) + '<br/>' +
+                                  (d.label ? ('Location: ' + escapeHtml(d.label)) : '');
+                    marker.bindPopup(popup);
+                    bounds.push([lat, lng]);
+                });
+
+                if (bounds.length) {
+                    map.fitBounds(bounds, {padding: [50,50]});
+                }
+            })();
+        </script>
+    </div>
+</div>
+</body>
+</html>

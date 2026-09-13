@@ -1,0 +1,365 @@
+<?php
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/site_header.php';
+
+function postString(string $key): string
+{
+    $value = $_POST[$key] ?? '';
+
+    if (is_array($value)) {
+        $value = end($value);
+        if ($value === false) {
+            $value = '';
+        }
+    }
+
+    return trim((string)$value);
+}
+
+if (empty($_SESSION['authenticated']) || empty($_SESSION['user_status']) || empty($_SESSION['user_id'])) {
+    redirect('login.php');
+}
+
+if ($_SESSION['user_status'] !== 'admin') {
+    redirect('dashboard.php');
+}
+
+$ownerRoleMap = ['students' => 'student', 'staff' => 'staff', 'foremen' => 'foreman'];
+$persistentControls = ['website_blocker', 'url_scanner_activation', 'live_location'];
+$oneShotCommands = ['remote_lock', 'app_delete', 'app_killswitch'];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = postString('action');
+
+    if ($action === 'control_action') {
+        $controlName = postString('control_name');
+        $enabled = (int)postString('enabled');
+        $postRole = postString('role');
+        $postUserId = (int)postString('user_id');
+
+        if ($controlName !== '' && isset($ownerRoleMap[$postRole]) && $postUserId > 0) {
+            $ownerRole = $ownerRoleMap[$postRole];
+            $deviceStmt = $pdo->prepare("SELECT id FROM devices WHERE owner_role = :r AND owner_id = :id AND status != 'deleted' LIMIT 1");
+            $deviceStmt->execute(['r' => $ownerRole, 'id' => $postUserId]);
+            $deviceRow = $deviceStmt->fetch();
+
+            if ($deviceRow === false) {
+                $_SESSION['flash_message'] = 'No device enrolled for this account - nothing to control.';
+            } else {
+                $deviceId = (int)$deviceRow['id'];
+
+                if (in_array($controlName, $persistentControls, true)) {
+                    $pdo->prepare(
+                        "INSERT INTO device_controls (device_id, control_name, enabled, updated_by_admin_id)
+                         VALUES (:device_id, :name, :enabled, :admin_id)
+                         ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), updated_by_admin_id = VALUES(updated_by_admin_id), updated_at = NOW()"
+                    )->execute([
+                        'device_id' => $deviceId,
+                        'name' => $controlName,
+                        'enabled' => $enabled,
+                        'admin_id' => $_SESSION['user_id'],
+                    ]);
+                } elseif ($controlName === 'app_turn_off' || $controlName === 'app_turn_on') {
+                    $agentEnabled = $controlName === 'app_turn_on' ? 1 : 0;
+                    $pdo->prepare(
+                        "INSERT INTO device_controls (device_id, control_name, enabled, updated_by_admin_id)
+                         VALUES (:device_id, 'agent_enabled', :enabled, :admin_id)
+                         ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), updated_by_admin_id = VALUES(updated_by_admin_id), updated_at = NOW()"
+                    )->execute([
+                        'device_id' => $deviceId,
+                        'enabled' => $agentEnabled,
+                        'admin_id' => $_SESSION['user_id'],
+                    ]);
+                } elseif (in_array($controlName, $oneShotCommands, true)) {
+                    if ($enabled === 1) {
+                        $pdo->prepare(
+                            "INSERT INTO device_commands (device_id, command_name, status, issued_by_admin_id)
+                             VALUES (:device_id, :name, 'pending', :admin_id)"
+                        )->execute(['device_id' => $deviceId, 'name' => $controlName, 'admin_id' => $_SESSION['user_id']]);
+
+                        if ($controlName === 'app_killswitch') {
+                            $pdo->prepare("UPDATE devices SET status = 'killed' WHERE id = :id")->execute(['id' => $deviceId]);
+                        }
+                    } else {
+                        $pdo->prepare(
+                            "UPDATE device_commands SET status = 'expired' WHERE device_id = :device_id AND command_name = :name AND status = 'pending'"
+                        )->execute(['device_id' => $deviceId, 'name' => $controlName]);
+
+                        if ($controlName === 'app_killswitch') {
+                            $pdo->prepare("UPDATE devices SET status = 'active' WHERE id = :id AND status = 'killed'")->execute(['id' => $deviceId]);
+                        }
+                    }
+                }
+
+                $pdo->prepare(
+                    "INSERT INTO device_events (device_id, owner_role, owner_id, actor_type, actor_id, event_type, event_detail)
+                     VALUES (:device_id, :role, :owner_id, 'admin', :admin_id, 'control_changed', :detail)"
+                )->execute([
+                    'device_id' => $deviceId,
+                    'role' => $ownerRole,
+                    'owner_id' => $postUserId,
+                    'admin_id' => (string)$_SESSION['user_id'],
+                    'detail' => json_encode(['control_name' => $controlName, 'enabled' => $enabled]),
+                ]);
+
+                $_SESSION['flash_message'] = 'Control room command updated.';
+            }
+        }
+    }
+
+    redirect('admin_control_room.php?role=' . urlencode(postString('role')) . '&user_id=' . urlencode(postString('user_id')));
+}
+
+$role = $_GET['role'] ?? 'students';
+$userId = (int)($_GET['user_id'] ?? 0);
+$roleMap = [
+    'students' => ['table' => 'students', 'id_column' => 'student_id', 'label' => 'Student'],
+    'staff' => ['table' => 'staff', 'id_column' => 'worker_reg_no', 'label' => 'Staff'],
+    'foremen' => ['table' => 'foremen', 'id_column' => 'foreman_reg_no', 'label' => 'Foreman'],
+];
+
+if (!isset($roleMap[$role]) || $userId <= 0) {
+    redirect('admin_dashboard.php');
+}
+
+$table = $roleMap[$role]['table'];
+$stmt = $pdo->prepare("SELECT * FROM {$table} WHERE id = :id LIMIT 1");
+$stmt->execute(['id' => $userId]);
+$user = $stmt->fetch();
+
+if (!$user) {
+    redirect('admin_dashboard.php');
+}
+
+$displayName = trim((string)($user['first_name'] ?? '') . ' ' . (string)($user['last_name'] ?? ''));
+if ($role === 'staff') {
+    $displayName = trim((string)($user['full_name'] ?? ''));
+}
+
+if ($displayName === '') {
+    $displayName = (string)($user[$roleMap[$role]['id_column']] ?? 'User');
+}
+
+$controlActions = [
+    'website_blocker' => 'Website Blocker',
+    'remote_lock' => 'Remote Lock',
+    'live_location' => 'Live Location',
+    'url_scanner_activation' => 'URL Scanner Activation',
+    'app_turn_off' => 'App Turn Off',
+    'app_turn_on' => 'App Turn On',
+    'app_delete' => 'App Delete',
+    'app_killswitch' => 'App Kill Switch',
+];
+
+$ownerRole = $ownerRoleMap[$role];
+$deviceStmt = $pdo->prepare("SELECT * FROM devices WHERE owner_role = :r AND owner_id = :id AND status != 'deleted' ORDER BY enrolled_at DESC LIMIT 1");
+$deviceStmt->execute(['r' => $ownerRole, 'id' => $userId]);
+$device = $deviceStmt->fetch();
+
+$controlStates = [];
+$commandStates = [];
+
+if ($device) {
+    $deviceId = (int)$device['id'];
+
+    $ctrlStmt = $pdo->prepare("SELECT control_name, enabled FROM device_controls WHERE device_id = :id");
+    $ctrlStmt->execute(['id' => $deviceId]);
+    foreach ($ctrlStmt->fetchAll() as $row) {
+        $controlStates[(string)$row['control_name']] = (int)$row['enabled'];
+    }
+    // app_turn_off / app_turn_on both reflect the single agent_enabled toggle.
+    $controlStates['app_turn_on'] = (int)($controlStates['agent_enabled'] ?? 1);
+    $controlStates['app_turn_off'] = $controlStates['app_turn_on'] ? 0 : 1;
+
+    foreach ($oneShotCommands as $cmdName) {
+        $cmdStmt = $pdo->prepare(
+            "SELECT status FROM device_commands WHERE device_id = :id AND command_name = :name ORDER BY issued_at DESC LIMIT 1"
+        );
+        $cmdStmt->execute(['id' => $deviceId, 'name' => $cmdName]);
+        $latest = $cmdStmt->fetch();
+        $isPending = $latest && in_array($latest['status'], ['pending', 'delivered', 'received'], true);
+        $controlStates[$cmdName] = $isPending ? 1 : 0;
+        $commandStates[$cmdName] = $latest ? (string)$latest['status'] : 'none';
+    }
+
+    $deviceOnline = $device['last_poll_at'] && (strtotime((string)$device['last_poll_at']) > time() - 90);
+}
+
+$flashMessage = $_SESSION['flash_message'] ?? '';
+unset($_SESSION['flash_message']);
+
+// Build a list of all devices (students, staff, foremen) that have coordinates so the admin map can show them all.
+$allDevices = [];
+$roleTables = [
+    'students' => 'students',
+    'staff' => 'staff',
+    'foremen' => 'foremen',
+];
+
+foreach ($roleTables as $roleName => $tableName) {
+    try {
+    // Select all columns and handle missing name fields in PHP to avoid column-not-found errors
+    $stmt = $pdo->prepare("SELECT * FROM {$tableName} WHERE location_lat IS NOT NULL AND location_lat != '' AND location_lng IS NOT NULL AND location_lng != ''");
+    $stmt->execute();
+    $rows = $stmt->fetchAll();
+
+    foreach ($rows as $r) {
+            $display = trim((string)($r['full_name'] ?? '') . ' ' . (string)($r['first_name'] ?? '') . ' ' . (string)($r['last_name'] ?? ''));
+            if ($display === '') {
+                $display = sprintf('%s-%s', $roleName, (string)($r['id'] ?? ''));
+            }
+
+            $lat = isset($r['location_lat']) ? (float)$r['location_lat'] : null;
+            $lng = isset($r['location_lng']) ? (float)$r['location_lng'] : null;
+
+            if ($lat !== null && $lng !== null) {
+                $allDevices[] = [
+                    'role' => $roleName,
+                    'id' => (int)$r['id'],
+                    'name' => $display,
+                    'label' => (string)($r['location_label'] ?? ''),
+                    'device_status' => (string)($r['device_status'] ?? ''),
+                    'lat' => $lat,
+                    'lng' => $lng,
+                ];
+            }
+        }
+    } catch (Throwable $ex) {
+        // ignore per-table failures but continue
+    }
+}
+
+$allDevicesJson = json_encode($allDevices, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE);
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Room | MoWLiSS</title>
+    <link rel="stylesheet" href="style.css?v=6">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-sA+e2H5f6b0n7g2vJp3s3w5xv1Xo4p+X2h6v7g2JtkA=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-o9N1j8bN7k6s7Q0b2R1x4w6v9s8y5Z2h3j4k5l6m7n8=" crossorigin=""></script>
+</head>
+<body>
+<?php render_site_header(); ?>
+<div class="container">
+    <div class="dashboard-top">
+        <div>
+            <h1>MoWLiSS Dashboard</h1>
+            <p class="small">Control Room</p>
+        </div>
+        <div>
+            <a class="btn" style="display:inline-block; width:auto; text-decoration:none;" href="admin_dashboard.php">Back to Admin</a>
+        </div>
+    </div>
+
+    <?php if ($flashMessage !== ''): ?>
+        <div class="alert alert-success"><?= e($flashMessage) ?></div>
+    <?php endif; ?>
+
+    <div class="dashboard-card">
+        <h2><?= e($displayName) ?> — <?= e($roleMap[$role]['label']) ?> Account</h2>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><th>Account Type</th><td><?= e($roleMap[$role]['label']) ?></td></tr>
+                    <tr><th>Account ID</th><td><?= e((string)($user[$roleMap[$role]['id_column']] ?? '')) ?></td></tr>
+                    <?php if ($device): ?>
+                        <tr><th>Enrolled Device</th><td><?= e((string)($device['device_name'] ?? 'Unknown')) ?></td></tr>
+                        <tr><th>Online Status</th><td><span class="status-badge <?= $deviceOnline ? 'approved' : 'pending' ?>"><?= $deviceOnline ? 'Online' : 'Offline' ?></span></td></tr>
+                    <?php else: ?>
+                        <tr><th>Enrolled Device</th><td><em>None</em></td></tr>
+                    <?php endif; ?>
+                    <tr><th>Device Status</th><td><?= e((string)($user['device_status'] ?? 'healthy')) ?></td></tr>
+                    <tr><th>Last Seen</th><td><?= e((string)($user['last_seen'] ?? 'Never')) ?></td></tr>
+                    <tr><th>Location</th><td><?= e((string)($user['location_label'] ?? 'No location yet')) ?></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="dashboard-card">
+        <h2>App Controls</h2>
+        <?php if (!$device): ?>
+            <p>No device enrolled for this account yet - nothing to control. The account holder can enroll a device
+            from their own dashboard once logged in.</p>
+        <?php else: ?>
+        <div class="control-grid">
+            <?php foreach ($controlActions as $key => $label): ?>
+                <?php
+                    $enabled = (int)($controlStates[$key] ?? 0);
+                    $isCommand = isset($commandStates[$key]);
+                    $badgeText = $isCommand ? strtoupper($commandStates[$key]) : ($enabled ? 'ON' : 'OFF');
+                ?>
+                <form method="POST" class="admin-control-form">
+                    <input type="hidden" name="action" value="control_action">
+                    <input type="hidden" name="role" value="<?= e($role) ?>">
+                    <input type="hidden" name="user_id" value="<?= (int)$userId ?>">
+                    <input type="hidden" name="control_name" value="<?= e($key) ?>">
+                    <input type="hidden" name="enabled" value="<?= $enabled ? 0 : 1 ?>">
+                    <button type="submit" class="control-btn <?= $enabled ? 'on' : 'off' ?>"><?= e($label) ?><?= $isCommand ? ($enabled ? ' (cancel)' : ' (issue)') : '' ?></button>
+                    <span class="status-badge <?= $enabled ? 'approved' : 'pending' ?>"><?= e($badgeText) ?></span>
+                </form>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+    </div>
+
+    <div class="dashboard-card">
+        <h2>Live Devices Map</h2>
+        <div id="admin-map" style="width:100%; height:480px; border-radius:12px; overflow:hidden;"></div>
+        <script>
+            (function(){
+                const devices = <?= $allDevicesJson ?> || [];
+
+                // initialize map
+                const mapEl = document.getElementById('admin-map');
+                const map = L.map(mapEl).setView([0,0], 2);
+
+                const tileUrl = <?= json_encode(map_tile_url(), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
+                const tileAttribution = <?= json_encode(map_attribution(), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
+
+                L.tileLayer(tileUrl, {
+                    maxZoom: 19,
+                    attribution: tileAttribution
+                }).addTo(map);
+
+                function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+                if (devices.length === 0) {
+                    mapEl.innerHTML = '<div class="map-placeholder">No live locations available for any devices yet.</div>';
+                    return;
+                }
+
+                const bounds = [];
+                devices.forEach(d => {
+                    const lat = parseFloat(d.lat);
+                    const lng = parseFloat(d.lng);
+                    if (isNaN(lat) || isNaN(lng)) return;
+
+                    const marker = L.marker([lat, lng]).addTo(map);
+                    const popup = '<strong>' + escapeHtml(d.name) + '</strong><br/>' +
+                                  'Role: ' + escapeHtml(d.role) + '<br/>' +
+                                  'Status: ' + escapeHtml(d.device_status) + '<br/>' +
+                                  (d.label ? ('Location: ' + escapeHtml(d.label)) : '');
+                    marker.bindPopup(popup);
+                    bounds.push([lat, lng]);
+                });
+
+                if (bounds.length) {
+                    map.fitBounds(bounds, {padding: [50,50]});
+                }
+            })();
+        </script>
+    </div>
+</div>
+</body>
+</html>
