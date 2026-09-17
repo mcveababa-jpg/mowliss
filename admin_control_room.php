@@ -238,7 +238,7 @@ $allDevicesJson = json_encode($allDevices, JSON_HEX_TAG | JSON_HEX_APOS | JSON_H
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Control Room | MoWLiSS</title>
-    <link rel="stylesheet" href="style.css?v=6">
+    <link rel="stylesheet" href="style.css?v=7">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-sA+e2H5f6b0n7g2vJp3s3w5xv1Xo4p+X2h6v7g2JtkA=" crossorigin="" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-o9N1j8bN7k6s7Q0b2R1x4w6v9s8y5Z2h3j4k5l6m7n8=" crossorigin=""></script>
 </head>

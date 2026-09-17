@@ -8,10 +8,10 @@ require_once __DIR__ . '/env.php';
 
 $appConfig = [
     'app_name' => 'MoWLiSS',
-    'base_url' => getenv('APP_BASE_URL') ?: 'http://localhost/comeback',
-    'map_tile_url' => getenv('MAP_TILE_URL') ?: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    'map_attribution' => getenv('MAP_ATTRIBUTION') ?: '&copy; OpenStreetMap contributors',
-    'map_embed_base' => getenv('MAP_EMBED_BASE') ?: 'https://www.openstreetmap.org/export/embed.html',
+    'base_url' => env('APP_BASE_URL', 'http://localhost/comeback'),
+    'map_tile_url' => env('MAP_TILE_URL', 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'),
+    'map_attribution' => env('MAP_ATTRIBUTION', '&copy; OpenStreetMap contributors'),
+    'map_embed_base' => env('MAP_EMBED_BASE', 'https://www.openstreetmap.org/export/embed.html'),
 ];
 
 function app_base_url(): string

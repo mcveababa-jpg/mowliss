@@ -14,10 +14,10 @@ if (session_status() === PHP_SESSION_NONE) {
     Username: root
     Password: empty
 */
-$DB_HOST = getenv('DB_HOST') ?: '127.0.0.1';
-$DB_NAME = getenv('DB_NAME') ?: 'mowliss';
-$DB_USER = getenv('DB_USER') ?: 'root';
-$DB_PASS = getenv('DB_PASS') ?: '';
+$DB_HOST = env('DB_HOST', '127.0.0.1');
+$DB_NAME = env('DB_NAME', 'mowliss');
+$DB_USER = env('DB_USER', 'root');
+$DB_PASS = env('DB_PASS', '');
 
 try {
     $pdo = new PDO(
@@ -159,6 +159,49 @@ function ensure_database_schema(): void
             PRIMARY KEY (`id`),
             KEY `idx_device` (`device_id`),
             KEY `idx_owner` (`owner_role`, `owner_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+
+    // Chatroom reporting/ticketing tables - previously only ever created lazily by whichever
+    // page happened to run first (submit_report.php, chat_submit.php, admin_dashboard.php),
+    // which silently relied on a database that already had them from prior use. A genuinely
+    // fresh database needs them created centrally like everything else.
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS `chat_reports` (
+            `id` INT NOT NULL AUTO_INCREMENT,
+            `room` VARCHAR(100) NOT NULL,
+            `submitter_id` INT NOT NULL,
+            `submitter_role` VARCHAR(50) NOT NULL,
+            `message` TEXT NOT NULL,
+            `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS `chat_messages` (
+            `id` INT NOT NULL AUTO_INCREMENT,
+            `conversation_key` VARCHAR(100) NOT NULL,
+            `sender_role` VARCHAR(50) NOT NULL,
+            `sender_id` INT NOT NULL,
+            `message` TEXT NOT NULL,
+            `is_admin` TINYINT(1) NOT NULL DEFAULT 0,
+            `is_read` TINYINT(1) NOT NULL DEFAULT 0,
+            `report_id` INT NULL,
+            `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS `ticket_actions` (
+            `id` INT NOT NULL AUTO_INCREMENT,
+            `report_id` INT NOT NULL,
+            `admin_id` INT NOT NULL,
+            `action` VARCHAR(50) NOT NULL,
+            `note` TEXT NULL,
+            `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
 

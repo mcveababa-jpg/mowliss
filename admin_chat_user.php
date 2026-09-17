@@ -76,15 +76,18 @@ try {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Chat Admin | MoWLiSS</title>
-    <link rel="stylesheet" href="style.css?v=6">
+    <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 <?php render_site_header(); ?>
 <div class="container report-shell">
     <div class="report-header">
-        <div>
-            <h1>Chat Admin</h1>
-            <p class="small">Send messages directly to the site administrators.</p>
+        <div class="room-title-row">
+            <img src="assets/img/admin_support_icon.png?v=1" alt="Admin support icon" class="room-logo">
+            <div>
+                <h1>Chat Admin</h1>
+                <p class="small">Send messages directly to the site administrators.</p>
+            </div>
         </div>
         <div class="form-actions">
             <a class="btn inline-btn" href="dashboard.php">Back to Dashboard</a>

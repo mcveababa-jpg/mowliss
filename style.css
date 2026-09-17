@@ -625,6 +625,21 @@ th {
     margin-bottom: 24px;
 }
 
+.room-title-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.room-logo {
+    height: 56px;
+    width: auto;
+    flex-shrink: 0;
+    background: var(--white);
+    border-radius: 8px;
+    padding: 4px;
+}
+
 .report-header h1 {
     color: var(--white);
     font-size: clamp(1.8rem, 3vw, 2.5rem);

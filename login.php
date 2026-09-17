@@ -366,7 +366,7 @@ unset($_SESSION['flash_success']);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login | MoWLiSS - Mobile Web Link Safety Scanner</title>
-    <link rel="stylesheet" href="style.css?v=6">
+    <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 <?php render_site_header(); ?>
@@ -444,7 +444,7 @@ unset($_SESSION['flash_success']);
         </form>
 
         <div class="links">
-            <a href="register.php">Create an account</a><br>
+            <a href="login.html?tab=register">Create an account</a><br>
             <a href="index.html">Back to Home</a>
         </div>
     </div>

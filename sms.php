@@ -34,9 +34,9 @@ function normalizePngPhoneForSms(string $rawPhone): ?string
  */
 function sendSmsViaTwilio(string $toE164, string $message): array
 {
-    $accountSid = getenv('TWILIO_ACCOUNT_SID') ?: '';
-    $authToken = getenv('TWILIO_AUTH_TOKEN') ?: '';
-    $fromNumber = getenv('TWILIO_FROM_NUMBER') ?: '';
+    $accountSid = env('TWILIO_ACCOUNT_SID', '');
+    $authToken = env('TWILIO_AUTH_TOKEN', '');
+    $fromNumber = env('TWILIO_FROM_NUMBER', '');
 
     if ($accountSid === '' || $authToken === '' || $fromNumber === '') {
         error_log('SMS not sent: Twilio credentials are not configured (TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_FROM_NUMBER).');

@@ -39,15 +39,18 @@ $items = [
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= e($reportTitle) ?> | MoWLiSS</title>
-    <link rel="stylesheet" href="style.css?v=6">
+    <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 <?php render_site_header(); ?>
     <div class="container report-shell">
         <div class="report-header">
-            <div>
-                <h1><?= e($reportTitle) ?></h1>
-                <p class="small">Report ID: <?= e($reportCode) ?></p>
+            <div class="room-title-row">
+                <img src="assets/img/dict_logo.png?v=1" alt="DICT logo" class="room-logo">
+                <div>
+                    <h1><?= e($reportTitle) ?></h1>
+                    <p class="small">Report ID: <?= e($reportCode) ?></p>
+                </div>
             </div>
             <div class="form-actions">
                 <a class="btn inline-btn" href="<?= e($backPage) ?>">Back to Dashboard</a>
