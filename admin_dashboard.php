@@ -483,85 +483,21 @@ if (!empty($selectedMapUser['location_lat']) && !empty($selectedMapUser['locatio
 
    <div class="dashboard-card">
        <h2>Chatroom Tickets</h2>
+       <p class="small">Reply to student, staff, and foreman enquiries from the dedicated ticket hub.</p>
        <div class="category-stack">
            <?php foreach (['students' => 'Student Tickets', 'staff' => 'Staff Tickets', 'foremen' => 'Foreman Tickets'] as $roleKey => $label): ?>
-               <div class="user-category">
-                   <h3><?= e($label) ?></h3>
-                   <div class="table-responsive">
-                       <table>
-                           <thead>
-                               <tr>
-                                   <th>Ticket #</th>
-                                   <th>Submitter</th>
-                                   <th>Message</th>
-                                   <th>Created</th>
-                                   <th>Status</th>
-                               </tr>
-                           </thead>
-                           <tbody>
-                               <?php $tickets = $ticketsByRole[$roleKey] ?? []; ?>
-                               <?php if (empty($tickets)): ?>
-                                   <tr><td colspan="5">No tickets in this category.</td></tr>
-                               <?php else: ?>
-                                   <?php foreach ($tickets as $t): ?>
-                                       <tr>
-                                           <td><a class="ticket-link" href="admin_view_chat.php?conv=<?= urlencode($roleKey . ':' . $t['submitter_id']) ?>&report=<?= (int)$t['id'] ?>">#<?= (int)$t['id'] ?></a></td>
-                                           <td><?= e((string)($t['submitter_name'] ?? $t['submitter_id'])) ?></td>
-                                           <td><?= e(mb_strimwidth($t['message'], 0, 80, '...')) ?></td>
-                                           <td><?= e((string)$t['created_at']) ?></td>
-                                           <td>
-                                               <?php
-                                                   $statusClass = 'pending';
-                                                   if (strtolower($t['status']) === 'attended') $statusClass = 'approved';
-                                                   if (strtolower($t['status']) === 'resolved') $statusClass = 'approved';
-                                                   if (strtolower($t['status']) === 'waiting') $statusClass = 'pending';
-                                               ?>
-                                               <form method="POST" action="update_ticket_status.php" style="display:inline-block;">
-                                                   <input type="hidden" name="report_id" value="<?= (int)$t['id'] ?>">
-                                                   <select name="action" onchange="this.form.submit()" style="padding:6px 10px;border-radius:8px;border:1px solid rgba(51,52,143,0.3);background:#f5f5fa;color:#1B1C5E;">
-                                                       <option value="attended" <?= strtolower($t['status']) === 'attended' ? 'selected' : '' ?>>Attended</option>
-                                                       <option value="waiting" <?= strtolower($t['status']) === 'waiting' ? 'selected' : '' ?>>Waiting</option>
-                                                       <option value="resolved" <?= strtolower($t['status']) === 'resolved' ? 'selected' : '' ?>>Resolved</option>
-                                                   </select>
-                                               </form>
-                                           </td>
-                                       </tr>
-                                   <?php endforeach; ?>
-                               <?php endif; ?>
-                           </tbody>
-                       </table>
+               <?php $tickets = $ticketsByRole[$roleKey] ?? []; ?>
+               <div class="user-category" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                   <div>
+                       <h3 style="margin-bottom:2px;"><?= e($label) ?></h3>
+                       <span class="small"><?= count($tickets) ?> ticket<?= count($tickets) === 1 ? '' : 's' ?></span>
                    </div>
-
-                   <!-- Conversations for admin chat (per-role) -->
-                   <div class="table-responsive" style="margin-top:12px;">
-                       <h4>Conversations</h4>
-                       <table>
-                           <thead>
-                               <tr><th>Conversation</th><th>Last Message</th><th>Updated</th><th>Action</th></tr>
-                           </thead>
-                           <tbody>
-                               <?php
-                                   // load last messages for conversations belonging to roleKey
-                                   $convStmt = $pdo->prepare("SELECT conversation_key, message, created_at FROM chat_messages WHERE conversation_key LIKE :prefix ORDER BY id DESC");
-                                   $prefix = $roleKey . ':%';
-                                   $convStmt->execute(['prefix' => $prefix]);
-                                   $seen = [];
-                                   foreach ($convStmt->fetchAll() as $c) {
-                                       $ck = $c['conversation_key'];
-                                       if (isset($seen[$ck])) continue;
-                                       $seen[$ck] = true;
-                                       $lastMsg = mb_strimwidth($c['message'], 0, 80, '...');
-                                       $when = $c['created_at'];
-                                       echo '<tr><td>' . e($ck) . '</td><td>' . e($lastMsg) . '</td><td>' . e($when) . '</td><td><a class="btn small-btn" href="admin_view_chat.php?conv=' . urlencode($ck) . '">Open</a></td></tr>';
-                                   }
-                                   if (empty($seen)) echo '<tr><td colspan="4">No conversations</td></tr>';
-                               ?>
-                           </tbody>
-                       </table>
-                   </div>
-
+                   <a class="btn small-btn" href="admin_tickets.php?category=<?= urlencode($roleKey) ?>">Open</a>
                </div>
            <?php endforeach; ?>
+       </div>
+       <div class="form-actions" style="margin-top:12px;">
+           <a class="btn" href="admin_tickets.php">Open Admin Chat &amp; Tickets</a>
        </div>
    </div>
 

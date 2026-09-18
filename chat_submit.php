@@ -106,6 +106,12 @@ $stmt->execute([
 // redirect back to the appropriate view
 if ($isAdmin) {
     $_SESSION['flash_message'] = 'Reply sent.';
+
+    $returnTo = trim((string)($_POST['return_to'] ?? ''));
+    if ($returnTo !== '' && strpos($returnTo, 'admin_tickets.php') === 0) {
+        redirect($returnTo);
+    }
+
     // if this reply belongs to a ticket, send admin back to that ticketed conversation
     $redir = 'admin_view_chat.php?conv=' . urlencode($conv);
     if ($reportId !== null) $redir .= '&report=' . (int)$reportId;
