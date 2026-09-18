@@ -315,13 +315,14 @@ $allDevicesJson = json_encode($allDevices, JSON_HEX_TAG | JSON_HEX_APOS | JSON_H
 
     <div class="dashboard-card">
         <h2>Live Devices Map</h2>
+        <p class="small">Auto-refreshes every 25 seconds while this page is open. <span id="map-last-updated"></span></p>
         <div id="admin-map" style="width:100%; height:480px; border-radius:12px; overflow:hidden;"></div>
         <script>
             (function(){
-                const devices = <?= $allDevicesJson ?> || [];
+                const initialDevices = <?= $allDevicesJson ?> || [];
 
-                // initialize map
                 const mapEl = document.getElementById('admin-map');
+                const lastUpdatedEl = document.getElementById('map-last-updated');
                 const map = L.map(mapEl).setView([0,0], 2);
 
                 const tileUrl = <?= json_encode(map_tile_url(), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
@@ -334,29 +335,78 @@ $allDevicesJson = json_encode($allDevices, JSON_HEX_TAG | JSON_HEX_APOS | JSON_H
 
                 function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-                if (devices.length === 0) {
-                    mapEl.innerHTML = '<div class="map-placeholder">No live locations available for any devices yet.</div>';
-                    return;
+                const markers = {}; // key "role:id" -> L.marker
+                let hasFitBoundsOnce = false;
+
+                function popupHtml(d) {
+                    return '<strong>' + escapeHtml(d.name) + '</strong><br/>' +
+                           'Role: ' + escapeHtml(d.role) + '<br/>' +
+                           'Status: ' + escapeHtml(d.device_status) + '<br/>' +
+                           (d.label ? ('Location: ' + escapeHtml(d.label)) : '');
                 }
 
-                const bounds = [];
-                devices.forEach(d => {
-                    const lat = parseFloat(d.lat);
-                    const lng = parseFloat(d.lng);
-                    if (isNaN(lat) || isNaN(lng)) return;
+                function renderDevices(devices) {
+                    if (!Array.isArray(devices)) return;
 
-                    const marker = L.marker([lat, lng]).addTo(map);
-                    const popup = '<strong>' + escapeHtml(d.name) + '</strong><br/>' +
-                                  'Role: ' + escapeHtml(d.role) + '<br/>' +
-                                  'Status: ' + escapeHtml(d.device_status) + '<br/>' +
-                                  (d.label ? ('Location: ' + escapeHtml(d.label)) : '');
-                    marker.bindPopup(popup);
-                    bounds.push([lat, lng]);
-                });
+                    if (devices.length === 0 && Object.keys(markers).length === 0) {
+                        mapEl.querySelectorAll('.map-placeholder').forEach(el => el.remove());
+                        const placeholder = document.createElement('div');
+                        placeholder.className = 'map-placeholder';
+                        placeholder.textContent = 'No live locations available for any devices yet.';
+                        mapEl.appendChild(placeholder);
+                        return;
+                    }
 
-                if (bounds.length) {
-                    map.fitBounds(bounds, {padding: [50,50]});
+                    const seenKeys = new Set();
+                    const bounds = [];
+
+                    devices.forEach(d => {
+                        const lat = parseFloat(d.lat);
+                        const lng = parseFloat(d.lng);
+                        if (isNaN(lat) || isNaN(lng)) return;
+
+                        const key = d.role + ':' + d.id;
+                        seenKeys.add(key);
+                        bounds.push([lat, lng]);
+
+                        if (markers[key]) {
+                            markers[key].setLatLng([lat, lng]);
+                            markers[key].setPopupContent(popupHtml(d));
+                        } else {
+                            const marker = L.marker([lat, lng]).addTo(map);
+                            marker.bindPopup(popupHtml(d));
+                            markers[key] = marker;
+                        }
+                    });
+
+                    // Remove markers for devices that no longer report a location
+                    // (e.g. live_location was turned off or the device was removed).
+                    Object.keys(markers).forEach(key => {
+                        if (!seenKeys.has(key)) {
+                            map.removeLayer(markers[key]);
+                            delete markers[key];
+                        }
+                    });
+
+                    if (!hasFitBoundsOnce && bounds.length) {
+                        map.fitBounds(bounds, {padding: [50,50]});
+                        hasFitBoundsOnce = true;
+                    }
+
+                    if (lastUpdatedEl) {
+                        lastUpdatedEl.textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+                    }
                 }
+
+                function refreshFromServer() {
+                    fetch('dump_devices_json.php', { credentials: 'same-origin' })
+                        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+                        .then(renderDevices)
+                        .catch(() => { /* keep showing last-known positions if a poll fails */ });
+                }
+
+                renderDevices(initialDevices);
+                setInterval(refreshFromServer, 25000);
             })();
         </script>
     </div>
