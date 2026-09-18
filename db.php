@@ -337,6 +337,53 @@ function ensure_database_schema(): void
     }
 }
 
+// Turns a device_events row into a human-readable sentence for the admin
+// control room's live activity feed - so admin sees what is actually
+// happening on a user's device, not just a raw event_type/JSON blob.
+function describe_device_event(array $row): string
+{
+    $controlLabels = [
+        'website_blocker' => 'Website Blocker',
+        'remote_lock' => 'Remote Lock',
+        'live_location' => 'Live Location',
+        'url_scanner_activation' => 'URL Scanner Activation',
+        'app_turn_off' => 'App Turn Off',
+        'app_turn_on' => 'App Turn On',
+        'app_delete' => 'App Delete',
+        'app_killswitch' => 'App Kill Switch',
+    ];
+
+    $detail = json_decode((string)($row['event_detail'] ?? ''), true);
+    if (!is_array($detail)) {
+        $detail = [];
+    }
+
+    $type = (string)($row['event_type'] ?? '');
+    $name = (string)($detail['control_name'] ?? $detail['command_name'] ?? '');
+    $label = $controlLabels[$name] ?? $name;
+    $isOneShot = in_array($name, ['remote_lock', 'app_delete', 'app_killswitch'], true);
+    $resultMessage = trim((string)($detail['result_message'] ?? ''));
+
+    switch ($type) {
+        case 'control_changed':
+            $enabled = (int)($detail['enabled'] ?? 0) === 1;
+            if ($isOneShot) {
+                return $enabled ? "Admin issued {$label}" : "Admin cancelled pending {$label}";
+            }
+            return 'Admin turned ' . ($enabled ? 'ON' : 'OFF') . " {$label}";
+        case 'command_delivered':
+            return "{$label} command delivered to device";
+        case 'command_received':
+            return "Device is now applying {$label}";
+        case 'command_completed':
+            return "Device confirmed {$label} completed" . ($resultMessage !== '' ? ": {$resultMessage}" : '');
+        case 'command_failed':
+            return "Device reported {$label} failed" . ($resultMessage !== '' ? ": {$resultMessage}" : '');
+        default:
+            return ucfirst(str_replace('_', ' ', $type));
+    }
+}
+
 function get_pdo(): PDO
 {
     global $pdo;

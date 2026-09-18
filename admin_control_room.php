@@ -184,7 +184,13 @@ if ($device) {
     }
 
     $deviceOnline = $device['last_poll_at'] && (strtotime((string)$device['last_poll_at']) > time() - 90);
+
+    $recentEventsStmt = $pdo->prepare("SELECT * FROM device_events WHERE device_id = :id ORDER BY id DESC LIMIT 20");
+    $recentEventsStmt->execute(['id' => $deviceId]);
+    $recentEvents = $recentEventsStmt->fetchAll();
 }
+
+$recentEvents = $recentEvents ?? [];
 
 $flashMessage = $_SESSION['flash_message'] ?? '';
 unset($_SESSION['flash_message']);
@@ -274,11 +280,11 @@ $allDevicesJson = json_encode($allDevices, JSON_HEX_TAG | JSON_HEX_APOS | JSON_H
                     <tr><th>Account ID</th><td><?= e((string)($user[$roleMap[$role]['id_column']] ?? '')) ?></td></tr>
                     <?php if ($device): ?>
                         <tr><th>Enrolled Device</th><td><?= e((string)($device['device_name'] ?? 'Unknown')) ?></td></tr>
-                        <tr><th>Online Status</th><td><span class="status-badge <?= $deviceOnline ? 'approved' : 'pending' ?>"><?= $deviceOnline ? 'Online' : 'Offline' ?></span></td></tr>
+                        <tr><th>Online Status</th><td><span id="online-status-badge" class="status-badge <?= $deviceOnline ? 'approved' : 'pending' ?>"><?= $deviceOnline ? 'Online' : 'Offline' ?></span></td></tr>
                     <?php else: ?>
                         <tr><th>Enrolled Device</th><td><em>None</em></td></tr>
                     <?php endif; ?>
-                    <tr><th>Device Status</th><td><?= e((string)($user['device_status'] ?? 'healthy')) ?></td></tr>
+                    <tr><th>Device Status</th><td id="device-status-cell"><?= e((string)($user['device_status'] ?? 'healthy')) ?></td></tr>
                     <tr><th>Last Seen</th><td><?= e((string)($user['last_seen'] ?? 'Never')) ?></td></tr>
                     <tr><th>Location</th><td><?= e((string)($user['location_label'] ?? 'No location yet')) ?></td></tr>
                 </tbody>
@@ -288,6 +294,7 @@ $allDevicesJson = json_encode($allDevices, JSON_HEX_TAG | JSON_HEX_APOS | JSON_H
 
     <div class="dashboard-card">
         <h2>App Controls</h2>
+        <p class="small">Status updates from the device appear within 2 seconds - no need to refresh.</p>
         <?php if (!$device): ?>
             <p>No device enrolled for this account yet - nothing to control. The account holder can enroll a device
             from their own dashboard once logged in.</p>
@@ -306,16 +313,28 @@ $allDevicesJson = json_encode($allDevices, JSON_HEX_TAG | JSON_HEX_APOS | JSON_H
                     <input type="hidden" name="control_name" value="<?= e($key) ?>">
                     <input type="hidden" name="enabled" value="<?= $enabled ? 0 : 1 ?>">
                     <button type="submit" class="control-btn <?= $enabled ? 'on' : 'off' ?>"><?= e($label) ?><?= $isCommand ? ($enabled ? ' (cancel)' : ' (issue)') : '' ?></button>
-                    <span class="status-badge <?= $enabled ? 'approved' : 'pending' ?>"><?= e($badgeText) ?></span>
+                    <span id="badge-<?= e($key) ?>" data-control="<?= e($key) ?>" data-is-command="<?= $isCommand ? '1' : '0' ?>" class="status-badge <?= $enabled ? 'approved' : 'pending' ?>"><?= e($badgeText) ?></span>
                 </form>
             <?php endforeach; ?>
         </div>
+
+        <h3 style="margin-top:20px;color:var(--navy-dark);">Recent Activity</h3>
+        <p class="small">What's happening on this device, most recent first.</p>
+        <ul id="activity-feed" class="activity-feed" data-last-event-id="<?= (int)($recentEvents[0]['id'] ?? 0) ?>">
+            <?php if (empty($recentEvents)): ?>
+                <li class="chat-empty">No activity yet.</li>
+            <?php else: ?>
+                <?php foreach ($recentEvents as $ev): ?>
+                    <li data-event-id="<?= (int)$ev['id'] ?>"><span class="activity-time"><?= e((string)$ev['created_at']) ?></span> &mdash; <?= e(describe_device_event($ev)) ?></li>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </ul>
         <?php endif; ?>
     </div>
 
     <div class="dashboard-card">
         <h2>Live Devices Map</h2>
-        <p class="small">Auto-refreshes every 25 seconds while this page is open. <span id="map-last-updated"></span></p>
+        <p class="small">Auto-refreshes every 2 seconds while this page is open. <span id="map-last-updated"></span></p>
         <div id="admin-map" style="width:100%; height:480px; border-radius:12px; overflow:hidden;"></div>
         <script>
             (function(){
@@ -406,12 +425,95 @@ $allDevicesJson = json_encode($allDevices, JSON_HEX_TAG | JSON_HEX_APOS | JSON_H
                 }
 
                 renderDevices(initialDevices);
-                setInterval(refreshFromServer, 25000);
+                setInterval(refreshFromServer, 2000);
             })();
         </script>
     </div>
 </div>
-<script src="assets/js/auto-refresh.js"></script>
-<script>mowlissAutoRefresh(20000);</script>
+<?php if ($device): ?>
+<script>
+(function(){
+    const role = <?= json_encode($role) ?>;
+    const userId = <?= (int)$userId ?>;
+    const feedEl = document.getElementById('activity-feed');
+    let lastEventId = parseInt(feedEl ? feedEl.dataset.lastEventId : '0', 10) || 0;
+    const commandNames = new Set(<?= json_encode(array_keys($commandStates)) ?>);
+
+    function applyControlsAndCommands(data) {
+        Object.keys(data.controls || {}).forEach(key => {
+            if (commandNames.has(key)) return; // handled below instead
+            const badge = document.getElementById('badge-' + key);
+            if (!badge) return;
+            const enabled = !!data.controls[key];
+            badge.textContent = enabled ? 'ON' : 'OFF';
+            badge.classList.toggle('approved', enabled);
+            badge.classList.toggle('pending', !enabled);
+        });
+
+        Object.keys(data.commands || {}).forEach(key => {
+            const badge = document.getElementById('badge-' + key);
+            if (!badge) return;
+            const status = data.commands[key] || 'none';
+            badge.textContent = status.toUpperCase();
+            const isActive = ['pending', 'delivered', 'received'].includes(status);
+            badge.classList.toggle('approved', isActive);
+            badge.classList.toggle('pending', !isActive);
+        });
+    }
+
+    function applyDeviceStatus(data) {
+        const onlineBadge = document.getElementById('online-status-badge');
+        if (onlineBadge) {
+            onlineBadge.textContent = data.online ? 'Online' : 'Offline';
+            onlineBadge.classList.toggle('approved', !!data.online);
+            onlineBadge.classList.toggle('pending', !data.online);
+        }
+        const statusCell = document.getElementById('device-status-cell');
+        if (statusCell && data.device_status) {
+            statusCell.textContent = data.device_status;
+        }
+    }
+
+    function appendEvents(events) {
+        if (!feedEl || !events || events.length === 0) return;
+
+        const emptyMsg = feedEl.querySelector('.chat-empty');
+        if (emptyMsg) emptyMsg.remove();
+
+        events.forEach(ev => {
+            const li = document.createElement('li');
+            li.dataset.eventId = ev.id;
+            li.className = 'activity-new';
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'activity-time';
+            timeSpan.textContent = ev.created_at;
+            li.appendChild(timeSpan);
+            li.appendChild(document.createTextNode(' — ' + ev.message));
+            feedEl.insertBefore(li, feedEl.firstChild);
+            if (ev.id > lastEventId) lastEventId = ev.id;
+        });
+
+        while (feedEl.children.length > 30) {
+            feedEl.removeChild(feedEl.lastChild);
+        }
+    }
+
+    function poll() {
+        const url = 'device_activity_poll.php?role=' + encodeURIComponent(role) + '&user_id=' + userId + '&after_id=' + lastEventId;
+        fetch(url, { credentials: 'same-origin' })
+            .then(r => r.ok ? r.json() : Promise.reject(r.status))
+            .then(data => {
+                if (data.no_device) return;
+                applyControlsAndCommands(data);
+                applyDeviceStatus(data);
+                appendEvents(data.events);
+            })
+            .catch(() => { /* keep showing last-known state if a poll fails */ });
+    }
+
+    setInterval(poll, 2000);
+})();
+</script>
+<?php endif; ?>
 </body>
 </html>
