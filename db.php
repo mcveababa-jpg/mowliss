@@ -178,6 +178,15 @@ function ensure_database_schema(): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
 
+    // Subject + origin let admin-initiated tickets (see admin_compose.php) carry a
+    // subject line and be distinguished from tickets opened by the user themselves.
+    try {
+        $pdo->exec("ALTER TABLE chat_reports ADD COLUMN IF NOT EXISTS subject VARCHAR(150) NULL DEFAULT NULL");
+        $pdo->exec("ALTER TABLE chat_reports ADD COLUMN IF NOT EXISTS origin ENUM('user','admin') NOT NULL DEFAULT 'user'");
+    } catch (PDOException $e) {
+        // ignore if columns already exist or server doesn't support IF NOT EXISTS
+    }
+
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS `chat_messages` (
             `id` INT NOT NULL AUTO_INCREMENT,

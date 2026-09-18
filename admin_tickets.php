@@ -76,15 +76,21 @@ foreach ($reports as $r) {
         // leave submitterName as the raw id
     }
 
+    $subjectText = trim((string)($r['subject'] ?? ''));
+    if ($subjectText === '') {
+        $subjectText = mb_strimwidth((string)$r['message'], 0, 60, '...');
+    }
+
     $ticketsByCategory[$cat][] = [
         'id' => $reportId,
         'conv' => $convKey,
         'submitter_id' => $submitterId,
         'submitter_name' => $submitterName,
-        'subject' => mb_strimwidth((string)$r['message'], 0, 60, '...'),
+        'subject' => $subjectText,
         'message' => $r['message'],
         'created_at' => $r['created_at'],
         'status' => $status,
+        'origin' => (string)($r['origin'] ?? 'user'),
     ];
 }
 
@@ -179,7 +185,10 @@ $returnTo = 'admin_tickets.php?category=' . urlencode($category) . ($ticketId > 
         </nav>
 
         <div class="ticket-list-panel">
-            <h3><?= e($categories[$category]['label']) ?> Tickets</h3>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                <h3 style="margin:0;"><?= e($categories[$category]['label']) ?> Tickets</h3>
+                <a class="btn small-btn" href="admin_compose.php?category=<?= urlencode($category) ?>">+ Compose</a>
+            </div>
             <?php if (empty($activeTickets)): ?>
                 <div class="chat-empty">No tickets in this category yet.</div>
             <?php else: ?>
@@ -189,6 +198,7 @@ $returnTo = 'admin_tickets.php?category=' . urlencode($category) . ($ticketId > 
                         <div class="ticket-card-top">
                             <span class="ticket-number">#<?= (int)$t['id'] ?></span>
                             <span class="ticket-tag ticket-tag-<?= e($category) ?>"><?= e($categories[$category]['label']) ?></span>
+                            <?php if ($t['origin'] === 'admin'): ?><span class="ticket-tag" style="background:var(--gold);color:var(--navy-dark);">Sent by You</span><?php endif; ?>
                             <?php if ($isUnread): ?><span class="ticket-unread-dot" title="New message"></span><?php endif; ?>
                         </div>
                         <div class="ticket-subject"><?= e($t['subject']) ?></div>
