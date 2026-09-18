@@ -483,7 +483,6 @@ if (!empty($selectedMapUser['location_lat']) && !empty($selectedMapUser['locatio
 
    <div class="dashboard-card">
        <h2>Chatroom Tickets</h2>
-       <p class="small">Reply to student, staff, and foreman enquiries from the dedicated ticket hub.</p>
        <div class="category-stack">
            <?php foreach (['students' => 'Student Tickets', 'staff' => 'Staff Tickets', 'foremen' => 'Foreman Tickets'] as $roleKey => $label): ?>
                <?php $tickets = $ticketsByRole[$roleKey] ?? []; ?>
@@ -496,7 +495,8 @@ if (!empty($selectedMapUser['location_lat']) && !empty($selectedMapUser['locatio
                </div>
            <?php endforeach; ?>
        </div>
-       <div class="form-actions" style="margin-top:12px;">
+       <p class="small" style="margin-top:12px;">Reply to student, staff, and foreman enquiries from the dedicated ticket hub.</p>
+       <div class="form-actions" style="margin-top:4px;">
            <a class="btn" href="admin_tickets.php">Open Admin Chat &amp; Tickets</a>
        </div>
    </div>
