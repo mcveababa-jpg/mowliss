@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/site_header.php';
-require_once __DIR__ . '/sms.php';
+require_once __DIR__ . '/email.php';
 
 $userStatusMap = [
     'student' => ['table' => 'students', 'id_column' => 'student_id', 'label' => 'Student'],
@@ -26,14 +26,9 @@ function resetPasswordLookup(PDO $pdo, string $status, string $identifier): ?arr
     return is_array($user) ? $user : null;
 }
 
-function normalizePhone(string $value): string
-{
-    return preg_replace('/\s+/', '', trim($value)) ?? '';
-}
-
 $status = trim((string)($_POST['user_status'] ?? $_GET['status'] ?? ''));
 $identifier = trim((string)($_POST['identifier'] ?? ''));
-$phoneInput = trim((string)($_POST['phone_number'] ?? ''));
+$emailInput = trim((string)($_POST['email'] ?? ''));
 $resetCode = trim((string)($_POST['reset_code'] ?? ''));
 $message = '';
 $messageType = 'info';
@@ -47,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'request_reset') {
         $status = trim((string)($_POST['user_status'] ?? ''));
         $identifier = trim((string)($_POST['identifier'] ?? ''));
-        $phoneInput = trim((string)($_POST['phone_number'] ?? ''));
+        $emailInput = trim((string)($_POST['email'] ?? ''));
 
         if (!isset($userStatusMap[$status])) {
             $message = 'Please choose a valid user status.';
@@ -55,41 +50,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($identifier === '') {
             $message = 'Please enter your ID or registration number.';
             $messageType = 'error';
-        } elseif ($phoneInput === '') {
-            $message = 'Please enter the phone number linked to your account.';
+        } elseif ($emailInput === '') {
+            $message = 'Please enter the email address linked to your account.';
             $messageType = 'error';
         } else {
             $account = resetPasswordLookup($pdo, $status, $identifier);
-            $storedPhone = normalizePhone((string)($account['phone_number'] ?? ''));
-            $inputPhone = normalizePhone((string)$phoneInput);
+            $storedEmail = strtolower(trim((string)($account['email'] ?? '')));
+            $inputEmail = strtolower($emailInput);
 
-            if (!$account || $storedPhone === '' || strtolower($storedPhone) !== strtolower($inputPhone)) {
-                $message = 'We could not match that account with the phone number on file. Please check your details or contact ICT support.';
+            if (!$account || $storedEmail === '' || $storedEmail !== $inputEmail) {
+                $message = 'We could not match that account with the email address on file. Please check your details or contact ICT support.';
                 $messageType = 'error';
             } else {
                 $generatedCode = (string)random_int(100000, 999999);
-                $smsResult = sendPasswordResetSms($storedPhone, $generatedCode);
+                $emailResult = sendPasswordResetEmail($storedEmail, $generatedCode);
 
-                if (!$smsResult['success']) {
-                    $message = $smsResult['error'] ?? 'We could not send the reset code. Please try again or contact ICT support.';
+                if (!$emailResult['success']) {
+                    $message = $emailResult['error'] ?? 'We could not send the reset code. Please try again or contact ICT support.';
                     $messageType = 'error';
                 } else {
                     $expiresAt = date('Y-m-d H:i:s', time() + 900);
 
                     $stmt = $pdo->prepare(
-                        'INSERT INTO password_reset_requests (user_status, user_identifier, phone_number, reset_code, expires_at, created_at)
-                         VALUES (:user_status, :user_identifier, :phone_number, :reset_code, :expires_at, NOW())'
+                        'INSERT INTO password_reset_requests (user_status, user_identifier, email, reset_code, expires_at, created_at)
+                         VALUES (:user_status, :user_identifier, :email, :reset_code, :expires_at, NOW())'
                     );
                     $stmt->execute([
                         'user_status' => $status,
                         'user_identifier' => $identifier,
-                        'phone_number' => $phoneInput,
+                        'email' => $emailInput,
                         'reset_code' => $generatedCode,
                         'expires_at' => $expiresAt,
                     ]);
 
                     $showCodeStep = true;
-                    $message = 'We found your record and sent a 6-digit code by SMS to the phone number on file. Enter it below to finish resetting your password. This code expires in 15 minutes.';
+                    $message = 'We found your record and sent a 6-digit code by email to the address on file. Enter it below to finish resetting your password. This code expires in 15 minutes.';
                     $messageType = 'success';
                     $matchedAccount = $account;
                 }
@@ -190,7 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="auth-card wide">
         <div class="brand">
             <h1>Reset Your Password</h1>
-            <p>Use your registered ID and phone number to reset your password securely.</p>
+            <p>Use your registered ID and email address to reset your password securely.</p>
         </div>
 
         <?php if ($message !== ''): ?>
@@ -199,8 +194,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <?php if ($showCodeStep): ?>
             <div class="support-box">
-                <strong>Check your phone</strong>
-                <p>We texted a 6-digit reset code to the phone number on file. It expires in 15 minutes.</p>
+                <strong>Check your email</strong>
+                <p>We emailed a 6-digit reset code to the address on file. It expires in 15 minutes.</p>
             </div>
         <?php endif; ?>
 
@@ -230,8 +225,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
 
                     <div class="form-group">
-                        <label for="phone_number">Phone Number on File *</label>
-                        <input type="text" id="phone_number" name="phone_number" value="<?= htmlspecialchars($phoneInput, ENT_QUOTES, 'UTF-8') ?>" placeholder="Use the phone number recorded in your account" required>
+                        <label for="email">Email on File *</label>
+                        <input type="email" id="email" name="email" value="<?= htmlspecialchars($emailInput, ENT_QUOTES, 'UTF-8') ?>" placeholder="Use the email address recorded in your account" required>
                     </div>
 
                     <button type="submit" class="btn">Request Reset Code</button>

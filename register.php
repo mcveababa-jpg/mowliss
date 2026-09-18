@@ -59,6 +59,7 @@ $termsAgreed = !empty($_POST['terms_agreed']);
 
 $phone = postNullable('phone_number');
 $dateOfBirth = postNullable('date_of_birth');
+$email = postString('email');
 
 $errors = [];
 
@@ -90,6 +91,12 @@ if (!$termsAgreed) {
 
 if ($dateOfBirth !== null && !validDate($dateOfBirth)) {
     $errors[] = 'Date of Birth is invalid.';
+}
+
+if ($email === '') {
+    $errors[] = 'Email is required.';
+} elseif (filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+    $errors[] = 'Please enter a valid email address.';
 }
 
 /*
@@ -200,6 +207,7 @@ try {
                     program,
                     department,
                     phone_number,
+                    email,
                     date_of_birth,
                    password_hash,
                    terms_agreed,
@@ -216,6 +224,7 @@ try {
                    :program,
                    :department,
                    :phone_number,
+                   :email,
                    :date_of_birth,
                    :password_hash,
                    1,
@@ -233,6 +242,7 @@ try {
             'program' => postString('program'),
             'department' => postString('department'),
             'phone_number' => $phone,
+            'email' => $email,
             'date_of_birth' => $dateOfBirth,
             'password_hash' => $passwordHash,
         ]);
@@ -247,6 +257,7 @@ try {
                     department,
                     compound,
                     phone_number,
+                    email,
                     date_of_birth,
                    password_hash,
                    terms_agreed,
@@ -262,6 +273,7 @@ try {
                    :department,
                    :compound,
                    :phone_number,
+                   :email,
                    :date_of_birth,
                    :password_hash,
                    1,
@@ -278,6 +290,7 @@ try {
             'department' => postString('department'),
             'compound' => postNullable('compound'),
             'phone_number' => $phone,
+            'email' => $email,
             'date_of_birth' => $dateOfBirth,
             'password_hash' => $passwordHash,
         ]);
@@ -292,6 +305,7 @@ try {
                     last_name,
                     department,
                     phone_number,
+                    email,
                     date_of_birth,
                    password_hash,
                    terms_agreed,
@@ -307,6 +321,7 @@ try {
                    :last_name,
                    :department,
                    :phone_number,
+                   :email,
                    :date_of_birth,
                    :password_hash,
                    1,
@@ -323,6 +338,7 @@ try {
             'last_name' => postString('last_name'),
             'department' => postString('department'),
             'phone_number' => $phone,
+            'email' => $email,
             'date_of_birth' => $dateOfBirth,
             'password_hash' => $passwordHash,
         ]);
@@ -335,6 +351,7 @@ try {
                     admin_id,
                     password_hash,
                     full_name,
+                    email,
                     terms_agreed
                 )
              VALUES
@@ -342,6 +359,7 @@ try {
                     :admin_id,
                     :password_hash,
                     :full_name,
+                    :email,
                     1
                 )"
         );
@@ -350,6 +368,7 @@ try {
             'admin_id' => postString('admin_id'),
             'password_hash' => $passwordHash,
             'full_name' => postNullable('full_name'),
+            'email' => $email,
         ]);
     }
 

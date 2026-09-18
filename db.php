@@ -43,12 +43,12 @@ function ensure_database_schema(): void
     global $pdo;
 
     $tables = [
-        'students' => ['student_id', 'first_name', 'last_name', 'program', 'department', 'phone_number', 'date_of_birth', 'password_hash', 'remember_token', 'terms_agreed', 'is_approved', 'approved_by', 'approved_at', 'account_status', 'is_online', 'last_seen', 'device_status', 'location_lat', 'location_lng', 'location_label', 'last_location_update', 'created_at', 'updated_at'],
-        'staff' => ['worker_reg_no', 'full_name', 'department', 'compound', 'phone_number', 'date_of_birth', 'password_hash', 'remember_token', 'terms_agreed', 'is_approved', 'approved_by', 'approved_at', 'account_status', 'is_online', 'last_seen', 'device_status', 'location_lat', 'location_lng', 'location_label', 'last_location_update', 'created_at', 'updated_at'],
-        'foremen' => ['foreman_reg_no', 'first_name', 'last_name', 'department', 'phone_number', 'date_of_birth', 'password_hash', 'remember_token', 'terms_agreed', 'is_approved', 'approved_by', 'approved_at', 'account_status', 'is_online', 'last_seen', 'device_status', 'location_lat', 'location_lng', 'location_label', 'last_location_update', 'created_at', 'updated_at'],
-        'admins' => ['admin_id', 'password_hash', 'full_name', 'failed_login_attempts', 'locked_until', 'remember_token', 'terms_agreed', 'created_at', 'updated_at'],
+        'students' => ['student_id', 'first_name', 'last_name', 'program', 'department', 'phone_number', 'email', 'date_of_birth', 'password_hash', 'remember_token', 'terms_agreed', 'is_approved', 'approved_by', 'approved_at', 'account_status', 'is_online', 'last_seen', 'device_status', 'location_lat', 'location_lng', 'location_label', 'last_location_update', 'created_at', 'updated_at'],
+        'staff' => ['worker_reg_no', 'full_name', 'department', 'compound', 'phone_number', 'email', 'date_of_birth', 'password_hash', 'remember_token', 'terms_agreed', 'is_approved', 'approved_by', 'approved_at', 'account_status', 'is_online', 'last_seen', 'device_status', 'location_lat', 'location_lng', 'location_label', 'last_location_update', 'created_at', 'updated_at'],
+        'foremen' => ['foreman_reg_no', 'first_name', 'last_name', 'department', 'phone_number', 'email', 'date_of_birth', 'password_hash', 'remember_token', 'terms_agreed', 'is_approved', 'approved_by', 'approved_at', 'account_status', 'is_online', 'last_seen', 'device_status', 'location_lat', 'location_lng', 'location_label', 'last_location_update', 'created_at', 'updated_at'],
+        'admins' => ['admin_id', 'password_hash', 'full_name', 'email', 'failed_login_attempts', 'locked_until', 'remember_token', 'terms_agreed', 'created_at', 'updated_at'],
         'login_logs' => ['user_status', 'identifier', 'ip_address', 'user_agent', 'success', 'failure_reason', 'attempted_at'],
-        'password_reset_requests' => ['user_status', 'user_identifier', 'phone_number', 'reset_code', 'expires_at', 'used_at', 'created_at'],
+        'password_reset_requests' => ['user_status', 'user_identifier', 'phone_number', 'email', 'reset_code', 'expires_at', 'used_at', 'created_at'],
     ];
 
     $pdo->exec(
@@ -282,6 +282,7 @@ function ensure_database_schema(): void
                 'password_hash', 'remember_token' => 'VARCHAR(255) NULL',
                 'full_name', 'first_name', 'last_name', 'department', 'program', 'compound' => 'VARCHAR(150) NULL',
                 'phone_number' => 'VARCHAR(25) NULL',
+                'email' => 'VARCHAR(191) NULL',
                 'date_of_birth' => 'DATE NULL',
                 'terms_agreed' => 'TINYINT(1) NOT NULL DEFAULT 0',
                 'is_approved' => 'TINYINT(1) NOT NULL DEFAULT 0',
