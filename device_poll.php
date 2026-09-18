@@ -78,7 +78,9 @@ if (($controls['live_location'] ?? false) && $location !== null && isset($locati
     )->execute([
         'lat' => (float)$location['lat'],
         'lng' => (float)$location['lng'],
-        'label' => trim((string)($location['label'] ?? '')) . ' (approximate, IP-based)',
+        // The agent's own label already states its actual source and accuracy
+        // (Windows Location Services vs. IP-based) - do not overwrite it here.
+        'label' => trim((string)($location['label'] ?? '')),
         'id' => $ownerId,
     ]);
 }
