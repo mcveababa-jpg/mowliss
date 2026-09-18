@@ -10,7 +10,9 @@ if (empty($_SESSION['authenticated']) || ($_SESSION['user_status'] ?? '') !== 'a
 
 $allDevices = [];
 foreach(['students'=>'students','staff'=>'staff','foremen'=>'foremen'] as $roleName=>$tableName){
-    $stmt=$pdo->prepare("SELECT id, first_name, last_name, full_name, location_lat, location_lng, location_label, device_status FROM {$tableName} WHERE location_lat IS NOT NULL AND location_lat != '' AND location_lng IS NOT NULL AND location_lng != ''");
+    // SELECT * because students/foremen use first_name+last_name while staff uses full_name -
+    // a fixed column list would break on whichever table doesn't have that column.
+    $stmt=$pdo->prepare("SELECT * FROM {$tableName} WHERE location_lat IS NOT NULL AND location_lat != '' AND location_lng IS NOT NULL AND location_lng != ''");
     $stmt->execute();
     $rows=$stmt->fetchAll();
     foreach($rows as $r){
