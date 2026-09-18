@@ -496,7 +496,7 @@ if (!empty($selectedMapUser['location_lat']) && !empty($selectedMapUser['locatio
            <?php endforeach; ?>
        </div>
        <div class="form-actions" style="margin-top:12px;justify-content:center;">
-           <a class="btn" href="admin_tickets.php">Open Admin Chat &amp; Tickets</a>
+           <a class="btn" style="display:inline-block;width:auto;text-decoration:none;" href="admin_tickets.php">Open Admin Chat &amp; Tickets</a>
        </div>
        <p style="margin-top:12px;text-align:center;font-weight:bold;color:#000000;">Reply to student, staff, and foreman enquiries from the dedicated ticket hub.</p>
    </div>
