@@ -502,5 +502,7 @@ if (!empty($selectedMapUser['location_lat']) && !empty($selectedMapUser['locatio
    </div>
 
 </div>
+<script src="assets/js/auto-refresh.js"></script>
+<script>mowlissAutoRefresh(20000);</script>
 </body>
 </html>

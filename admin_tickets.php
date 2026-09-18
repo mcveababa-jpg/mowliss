@@ -275,5 +275,7 @@ $returnTo = 'admin_tickets.php?category=' . urlencode($category) . ($ticketId > 
         </div>
     </div>
 </div>
+<script src="assets/js/auto-refresh.js"></script>
+<script>mowlissAutoRefresh(20000);</script>
 </body>
 </html>

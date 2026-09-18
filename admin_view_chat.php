@@ -176,5 +176,7 @@ $displayUser = htmlspecialchars((string)$conv, ENT_QUOTES, 'UTF-8');
         </form>
     </div>
 </div>
+<script src="assets/js/auto-refresh.js"></script>
+<script>mowlissAutoRefresh(20000);</script>
 </body>
 </html>

@@ -411,5 +411,7 @@ $allDevicesJson = json_encode($allDevices, JSON_HEX_TAG | JSON_HEX_APOS | JSON_H
         </script>
     </div>
 </div>
+<script src="assets/js/auto-refresh.js"></script>
+<script>mowlissAutoRefresh(20000);</script>
 </body>
 </html>

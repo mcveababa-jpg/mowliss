@@ -88,5 +88,7 @@ $details = [
 
     <?php require_once __DIR__ . '/dashboard_chatrooms.php'; render_dashboard_app_footer(); ?>
 </div>
+<script src="assets/js/auto-refresh.js"></script>
+<script>mowlissAutoRefresh(20000);</script>
 </body>
 </html>
