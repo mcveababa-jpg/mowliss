@@ -30,11 +30,18 @@ $pdo->exec("CREATE TABLE IF NOT EXISTS chat_messages (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-// ensure report_id column exists on older schemas
+// ensure report_id column exists on older schemas (MySQL has no ADD COLUMN IF NOT EXISTS)
 try {
-    $pdo->exec("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS report_id INT NULL");
+    $chatMessagesColumns = array_map(
+        static fn (array $column): string => strtolower((string)$column['Field']),
+        $pdo->query("SHOW COLUMNS FROM `chat_messages`")->fetchAll()
+    );
+
+    if (!in_array('report_id', $chatMessagesColumns, true)) {
+        $pdo->exec("ALTER TABLE chat_messages ADD COLUMN report_id INT NULL");
+    }
 } catch (PDOException $e) {
-    // ignore if the server doesn't support IF NOT EXISTS or the column already exists
+    // ignore; report_id will simply be unavailable if this fails
 }
 
 $isAdmin = ($_SESSION['user_status'] === 'admin') ? 1 : 0;

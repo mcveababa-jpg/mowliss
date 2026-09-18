@@ -180,11 +180,22 @@ function ensure_database_schema(): void
 
     // Subject + origin let admin-initiated tickets (see admin_compose.php) carry a
     // subject line and be distinguished from tickets opened by the user themselves.
+    // MySQL (unlike MariaDB) has no "ADD COLUMN IF NOT EXISTS", so check first.
     try {
-        $pdo->exec("ALTER TABLE chat_reports ADD COLUMN IF NOT EXISTS subject VARCHAR(150) NULL DEFAULT NULL");
-        $pdo->exec("ALTER TABLE chat_reports ADD COLUMN IF NOT EXISTS origin ENUM('user','admin') NOT NULL DEFAULT 'user'");
+        $chatReportsColumns = array_map(
+            static fn (array $column): string => strtolower((string)$column['Field']),
+            $pdo->query("SHOW COLUMNS FROM `chat_reports`")->fetchAll()
+        );
+
+        if (!in_array('subject', $chatReportsColumns, true)) {
+            $pdo->exec("ALTER TABLE chat_reports ADD COLUMN subject VARCHAR(150) NULL DEFAULT NULL");
+        }
+
+        if (!in_array('origin', $chatReportsColumns, true)) {
+            $pdo->exec("ALTER TABLE chat_reports ADD COLUMN origin ENUM('user','admin') NOT NULL DEFAULT 'user'");
+        }
     } catch (PDOException $e) {
-        // ignore if columns already exist or server doesn't support IF NOT EXISTS
+        // ignore; the columns will simply be missing and admin_tickets.php falls back gracefully
     }
 
     $pdo->exec(
