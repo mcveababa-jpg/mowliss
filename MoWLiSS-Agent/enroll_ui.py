@@ -13,9 +13,9 @@ def _default_server_url():
     path = resource_path("config.json")
     try:
         with open(path, "r", encoding="utf-8") as f:
-            return json.load(f).get("server_url", "http://localhost/comeback")
+            return json.load(f).get("server_url", "https://mowliss.duckdns.org")
     except (OSError, json.JSONDecodeError):
-        return "http://localhost/comeback"
+        return "https://mowliss.duckdns.org"
 
 
 def _autosize(win, min_width=380, min_height=200):
