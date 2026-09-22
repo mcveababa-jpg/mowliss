@@ -140,10 +140,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 WHERE id = :id"
            );
 
+           // Always prefixed, regardless of what the admin typed as a label - this pin
+           // came from a hand-typed coordinate, not the device's own GPS/Wi-Fi fix, and
+           // it must never be visually indistinguishable from a real device-reported
+           // location on the map (see device_poll.php / location.py's own "no guessing"
+           // rule - the same principle applies here to admin-entered pins).
+           $manualLabel = 'Admin-entered (unverified)';
+           if ($label !== '') {
+               $manualLabel .= ': ' . $label;
+           }
+
            $stmt->execute([
                'lat' => $lat,
                'lng' => $lng,
-               'location_label' => $label !== '' ? $label : 'Location updated',
+               'location_label' => $manualLabel,
                'id' => $userId,
            ]);
 
