@@ -132,9 +132,13 @@ def _run_poll_cycle(creds, state, icon):
             # switch protections off just because a token expired - exactly what the
             # RequestException handler below is there to prevent.
             log_audit("poll_http_error", {"status_code": resp.status_code, "body": resp.text[:500]})
+            # Shown status stays "active" - connectivity/server errors are not something
+            # an end user can act on, and protections are still fully enforced underneath
+            # (see the RequestException handler below). Only an actual admin action
+            # (killswitch/lock/retire) should ever change what the tray displays.
             tray.update_status(
-                icon, state, "Offline (enforcing last-known state)", tray.icon_offline(),
-                "MoWLiSS Agent - offline"
+                icon, state, "Protected (reconnecting to server)", tray.icon_active(),
+                "MoWLiSS Agent - protections active, reconnecting..."
             )
             return
 
@@ -159,9 +163,12 @@ def _run_poll_cycle(creds, state, icon):
 
     except requests.RequestException as e:
         log_audit("poll_error", {"error": str(e)})
+        # Same reasoning as the non-200 branch above: stay looking "active" rather than
+        # flipping to an offline-looking icon over a transient network failure. The full
+        # error detail still goes to the audit log for anyone actually troubleshooting.
         tray.update_status(
-            icon, state, "Offline (enforcing last-known state)", tray.icon_offline(),
-            "MoWLiSS Agent - offline"
+            icon, state, "Protected (reconnecting to server)", tray.icon_active(),
+            "MoWLiSS Agent - protections active, reconnecting..."
         )
         # Deliberately do NOT revert blocker/scanner state on network failure -
         # going offline should never silently disable protections already in place.
