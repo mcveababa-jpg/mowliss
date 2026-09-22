@@ -73,6 +73,7 @@ try {
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <link rel="icon" type="image/png" href="assets/img/favicon.png?v=1">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Chat Admin | MoWLiSS</title>

@@ -93,6 +93,7 @@ unset($_SESSION['flash_message']);
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <link rel="icon" type="image/png" href="assets/img/favicon.png?v=1">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Enroll a Device | MoWLiSS</title>
