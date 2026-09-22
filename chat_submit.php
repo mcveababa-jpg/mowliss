@@ -70,7 +70,7 @@ if (!$isAdmin) {
         $lastReportId = $rStmt->fetchColumn();
         if ($lastReportId) {
             // check if it has a resolve action
-            $checkAct = $pdo->prepare("SELECT 1 FROM ticket_actions WHERE report_id = :rid AND action = 'resolve' LIMIT 1");
+            $checkAct = $pdo->prepare("SELECT 1 FROM ticket_actions WHERE report_id = :rid AND action = 'resolved' LIMIT 1");
             try {
                 $checkAct->execute(['rid' => (int)$lastReportId]);
                 $resolved = (bool)$checkAct->fetchColumn();

@@ -1,5 +1,6 @@
 # Secrets / local environment
 .env
+scratch_ssh.py
 
 # Editor / agent-local metadata
 .vscode/

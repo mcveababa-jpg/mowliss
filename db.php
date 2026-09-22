@@ -335,6 +335,36 @@ function ensure_database_schema(): void
                 }
             }
         }
+
+        // student_id/worker_reg_no/foreman_reg_no/admin_id must be unique - db/init.sql
+        // (the Docker bootstrap path) defines these as UNIQUE KEY, but this generic
+        // fallback (used for plain XAMPP/local MySQL setups with no init.sql) only ever
+        // ADD COLUMN'd them as plain VARCHAR, so a install taking this path had no
+        // constraint stopping two accounts from registering the same ID.
+        $uniqueIdColumn = [
+            'students' => 'student_id',
+            'staff' => 'worker_reg_no',
+            'foremen' => 'foreman_reg_no',
+            'admins' => 'admin_id',
+        ][$table] ?? null;
+
+        if ($uniqueIdColumn !== null) {
+            try {
+                $idxStmt = $pdo->query("SHOW INDEX FROM `{$table}` WHERE Key_name = 'uniq_{$uniqueIdColumn}'");
+                $hasUniqueKey = (bool)$idxStmt->fetchColumn();
+            } catch (PDOException $e) {
+                $hasUniqueKey = false;
+            }
+
+            if (!$hasUniqueKey) {
+                try {
+                    $pdo->exec("ALTER TABLE `{$table}` ADD UNIQUE KEY `uniq_{$uniqueIdColumn}` (`{$uniqueIdColumn}`)");
+                } catch (PDOException $e) {
+                    // Duplicate values already present (pre-existing bad data) - can't add the
+                    // constraint until those are resolved by hand; don't fail startup over it.
+                }
+            }
+        }
     }
 }
 
