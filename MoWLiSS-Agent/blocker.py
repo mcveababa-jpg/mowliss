@@ -44,7 +44,7 @@ def _is_block_present(lines):
 
 def is_enabled():
     try:
-        with open(HOSTS_PATH, "r", encoding="utf-8", errors="ignore") as f:
+        with open(HOSTS_PATH, "r", encoding="utf-8", errors="surrogateescape") as f:
             return _is_block_present(f.readlines())
     except OSError:
         return False
@@ -52,7 +52,7 @@ def is_enabled():
 
 def enable():
     """Idempotent: does nothing if already enabled."""
-    with open(HOSTS_PATH, "r", encoding="utf-8", errors="ignore") as f:
+    with open(HOSTS_PATH, "r", encoding="utf-8", errors="surrogateescape") as f:
         lines = f.readlines()
     if _is_block_present(lines):
         return False
@@ -67,8 +67,15 @@ def enable():
 
 
 def disable():
-    """Idempotent: does nothing if already disabled."""
-    with open(HOSTS_PATH, "r", encoding="utf-8", errors="ignore") as f:
+    """Idempotent: does nothing if already disabled.
+
+    Reads/writes with errors="surrogateescape" (not "ignore") so that any line
+    containing bytes that aren't valid UTF-8 round-trips back out byte-for-byte
+    instead of being silently dropped - this function rewrites the *entire*
+    hosts file, so losing bytes here would permanently delete whatever content
+    that was, not just fail to read it.
+    """
+    with open(HOSTS_PATH, "r", encoding="utf-8", errors="surrogateescape") as f:
         lines = f.readlines()
     if not _is_block_present(lines):
         return False
@@ -86,6 +93,6 @@ def disable():
         if not inside:
             new_lines.append(line)
 
-    with open(HOSTS_PATH, "w", encoding="utf-8") as f:
+    with open(HOSTS_PATH, "w", encoding="utf-8", errors="surrogateescape") as f:
         f.writelines(new_lines)
     return True

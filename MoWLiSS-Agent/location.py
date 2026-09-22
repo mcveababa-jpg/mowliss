@@ -1,28 +1,35 @@
 import asyncio
 
-import requests
-
 from common import log_audit
 
-# Two location sources, tried in order of accuracy:
+# Only genuine on-device positioning is ever reported as a device's location.
 #
-# 1. Windows Location Services - when the OS has location turned on and the
-#    device has usable signal (mainly nearby Wi-Fi networks cross-referenced
-#    against Microsoft's positioning database, plus GPS on hardware that has
-#    it), this is typically accurate to tens or a few hundred metres.
-# 2. ip-api.com IP geolocation (free, keyless) - the fallback when Windows
-#    location is off, denied, or unavailable (e.g. a wired-only desktop with
-#    no Wi-Fi hardware). This only resolves to the ISP's registered routing
-#    point, which in Papua New Guinea in particular is often a single city
-#    (e.g. Port Moresby) regardless of the subscriber's actual location - it
-#    is a rough approximation, not a precise position.
+# Windows Location Services cross-references nearby Wi-Fi networks (and GPS
+# on hardware that has it) against Microsoft's positioning database - when it
+# has a usable fix this is typically accurate to tens or a few hundred
+# metres. But WLS can itself silently degrade to coarse, cell-tower/IP-level
+# positioning when no Wi-Fi signal is visible, so a reported accuracy worse
+# than MAX_ACCEPTABLE_ACCURACY_M is treated the same as no fix at all.
 #
-# There is no GPS on a typical desktop/laptop, so source 1 is itself not
-# GPS-grade unless the specific hardware has a GPS chip - this is always the
-# best available approximation, never a guarantee of precision.
+# An IP-geolocation fallback (ip-api.com) used to sit behind this and report
+# a location whenever WLS was off/denied/unavailable. That was removed: IP
+# geolocation only resolves to the ISP's registered routing point, which in
+# Papua New Guinea in particular is often a single city (e.g. Port Moresby)
+# regardless of the subscriber's actual location. Reporting that as "the
+# device's location" is a guess dressed up as a location fix, not a real
+# one - for a lost/stolen-device workflow that's actively misleading, so no
+# location is reported at all rather than a wrong one.
+
+MAX_ACCEPTABLE_ACCURACY_M = 500
+
+# Windows Location Services can hang rather than fail when it can't get a fix
+# (e.g. no Wi-Fi networks visible, indoors, service still initializing) - it's
+# not guaranteed to ever resolve. Bounding it here means a bad fix attempt
+# costs at most this many seconds instead of freezing whatever called us.
+LOCATE_TIMEOUT_S = 8
 
 
-def _get_windows_location():
+def get_location():
     try:
         from winsdk.windows.devices.geolocation import Geolocator, GeolocationAccessStatus
 
@@ -35,30 +42,24 @@ def _get_windows_location():
             pos = await locator.get_geoposition_async()
             coord = pos.coordinate
             accuracy_m = coord.accuracy
+
+            if accuracy_m is None or accuracy_m > MAX_ACCEPTABLE_ACCURACY_M:
+                log_audit("location_too_coarse", {"accuracy_m": accuracy_m})
+                return None
+
             return {
                 "lat": coord.point.position.latitude,
                 "lng": coord.point.position.longitude,
                 "label": f"Device-positioned, accuracy ~{int(accuracy_m)}m (Windows Location Services)",
             }
 
-        return asyncio.run(_locate())
-    except Exception as e:
-        log_audit("windows_location_unavailable", {"error": str(e)})
+        async def _locate_bounded():
+            return await asyncio.wait_for(_locate(), timeout=LOCATE_TIMEOUT_S)
+
+        return asyncio.run(_locate_bounded())
+    except (asyncio.TimeoutError, TimeoutError):
+        log_audit("location_timed_out", {"timeout_s": LOCATE_TIMEOUT_S})
         return None
-
-
-def _get_ip_location():
-    try:
-        resp = requests.get("http://ip-api.com/json/", timeout=5)
-        data = resp.json()
-        if data.get("status") != "success":
-            return None
-        label = f"{data.get('city', '?')}, {data.get('regionName', '?')}, {data.get('country', '?')} (approximate, IP-based)"
-        return {"lat": data.get("lat"), "lng": data.get("lon"), "label": label}
     except Exception as e:
-        log_audit("location_error", {"error": str(e)})
+        log_audit("location_unavailable", {"error": str(e)})
         return None
-
-
-def get_location():
-    return _get_windows_location() or _get_ip_location()

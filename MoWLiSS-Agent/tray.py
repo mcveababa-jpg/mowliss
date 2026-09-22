@@ -3,7 +3,7 @@ import os
 import pystray
 from PIL import Image, ImageDraw
 
-from common import AUDIT_LOG_PATH, ensure_app_dir
+from common import AUDIT_LOG_PATH, ensure_app_dir, log_audit, notify
 
 APP_NAME = "MoWLiSS Agent"
 
@@ -46,7 +46,13 @@ def open_audit_log(icon, item):
     ensure_app_dir()
     if not os.path.exists(AUDIT_LOG_PATH):
         open(AUDIT_LOG_PATH, "a", encoding="utf-8").close()
-    os.startfile(AUDIT_LOG_PATH)
+    try:
+        os.startfile(AUDIT_LOG_PATH)
+    except OSError as e:
+        # No application associated with .jsonl on this machine - don't let that
+        # crash the tray's menu-click handler, just tell the user where it is.
+        log_audit("open_audit_log_failed", {"error": str(e)})
+        notify("MoWLiSS Agent", f"Couldn't open the log automatically. It's at: {AUDIT_LOG_PATH}")
 
 
 def build_tray(state, on_quit):
