@@ -30,36 +30,51 @@ LOCATE_TIMEOUT_S = 8
 
 
 def get_location():
+    """Returns (location_dict_or_None, status_string).
+
+    status_string is always populated, even on failure - it's sent back to the
+    server so *why* a device has no location fix is visible from the admin
+    dashboard, without needing hands-on access to the physical machine to read
+    its local audit log.
+    """
     try:
         from winsdk.windows.devices.geolocation import Geolocator, GeolocationAccessStatus
 
         async def _locate():
             status = await Geolocator.request_access_async()
             if status != GeolocationAccessStatus.ALLOWED:
-                return None
+                return None, f"access_{status.name.lower()}"
 
             locator = Geolocator()
             pos = await locator.get_geoposition_async()
             coord = pos.coordinate
             accuracy_m = coord.accuracy
 
-            if accuracy_m is None or accuracy_m > MAX_ACCEPTABLE_ACCURACY_M:
-                log_audit("location_too_coarse", {"accuracy_m": accuracy_m})
-                return None
+            if accuracy_m is None:
+                return None, "no_accuracy_reported"
+
+            if accuracy_m > MAX_ACCEPTABLE_ACCURACY_M:
+                return None, f"too_coarse_{int(accuracy_m)}m"
 
             return {
                 "lat": coord.point.position.latitude,
                 "lng": coord.point.position.longitude,
                 "label": f"Device-positioned, accuracy ~{int(accuracy_m)}m (Windows Location Services)",
-            }
+            }, "ok"
 
         async def _locate_bounded():
             return await asyncio.wait_for(_locate(), timeout=LOCATE_TIMEOUT_S)
 
-        return asyncio.run(_locate_bounded())
+        loc, status = asyncio.run(_locate_bounded())
+        if status != "ok":
+            log_audit("location_not_used", {"status": status})
+        return loc, status
     except (asyncio.TimeoutError, TimeoutError):
         log_audit("location_timed_out", {"timeout_s": LOCATE_TIMEOUT_S})
-        return None
+        return None, "timed_out"
+    except ModuleNotFoundError as e:
+        log_audit("location_unavailable", {"error": str(e)})
+        return None, "winsdk_not_available"
     except Exception as e:
         log_audit("location_unavailable", {"error": str(e)})
-        return None
+        return None, f"error_{type(e).__name__}"

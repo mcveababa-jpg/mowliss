@@ -198,6 +198,22 @@ function ensure_database_schema(): void
         // ignore; the columns will simply be missing and admin_tickets.php falls back gracefully
     }
 
+    // Lets the admin see *why* a device currently has no location fix (e.g. permission
+    // denied, no Wi-Fi hardware to position against, fix too coarse to trust) without
+    // needing hands-on access to read the device's own local audit log.
+    try {
+        $devicesColumns = array_map(
+            static fn (array $column): string => strtolower((string)$column['Field']),
+            $pdo->query("SHOW COLUMNS FROM `devices`")->fetchAll()
+        );
+
+        if (!in_array('last_location_status', $devicesColumns, true)) {
+            $pdo->exec("ALTER TABLE devices ADD COLUMN last_location_status VARCHAR(60) NULL DEFAULT NULL");
+        }
+    } catch (PDOException $e) {
+        // ignore; falls back to just not showing the diagnostic
+    }
+
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS `chat_messages` (
             `id` INT NOT NULL AUTO_INCREMENT,
@@ -366,6 +382,37 @@ function ensure_database_schema(): void
             }
         }
     }
+}
+
+// Explains why a device currently has no location fix, from the raw status code the
+// agent reports every poll (location.py's get_location() second return value) - lets
+// the admin diagnose this remotely instead of needing physical access to the device.
+function describe_location_status(string $status): string
+{
+    if (str_starts_with($status, 'too_coarse_')) {
+        $meters = substr($status, strlen('too_coarse_'));
+        return "Windows got a fix, but only accurate to ~{$meters} - too rough to trust, so it wasn't shown. Usually means no nearby Wi-Fi networks for it to position against (common on a wired-only desktop).";
+    }
+
+    if (str_starts_with($status, 'access_')) {
+        $accessState = str_replace('access_', '', $status);
+        return match ($accessState) {
+            'denied' => 'Location permission was denied. On the device: Windows Settings > Privacy & security > Location, turn it on and allow desktop apps.',
+            'unspecified' => 'Windows has not decided on a location permission yet - it may need the consent prompt answered once on the device.',
+            default => "Location access status: {$accessState}.",
+        };
+    }
+
+    return match ($status) {
+        'no_accuracy_reported' => 'Windows returned a position with no accuracy figure, so it could not be trusted and was not shown.',
+        'timed_out', 'fetch_join_timed_out' => 'The location request took too long and was abandoned for this poll - will retry automatically next time.',
+        'prior_fetch_still_hung' => 'A previous location request from this device is still stuck; skipping until it clears.',
+        'winsdk_not_available' => 'This device is missing required Windows location components.',
+        'no_result' => 'No location result was produced this poll.',
+        default => str_starts_with($status, 'error_')
+            ? 'An unexpected error occurred while getting location: ' . substr($status, strlen('error_'))
+            : "Location status: {$status}.",
+    };
 }
 
 // Turns a device_events row into a human-readable sentence for the admin

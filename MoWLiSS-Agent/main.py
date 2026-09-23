@@ -97,6 +97,7 @@ def _run_poll_cycle(creds, state, icon):
         prev_thread = state.get("location_thread")
         if prev_thread is not None and prev_thread.is_alive():
             log_audit("location_fetch_skipped_prior_still_hung", {})
+            body["location_status"] = "prior_fetch_still_hung"
         else:
             loc_result = {}
 
@@ -109,8 +110,16 @@ def _run_poll_cycle(creds, state, icon):
             loc_thread.join(timeout=10)
             if loc_thread.is_alive():
                 log_audit("location_fetch_hung", {"timeout_s": 10})
-            elif loc_result.get("value"):
-                body["location"] = loc_result["value"]
+                body["location_status"] = "fetch_join_timed_out"
+            else:
+                # get_location() always returns (location_or_None, status_string) - the
+                # status is sent to the server regardless of outcome so *why* a device has
+                # no fix is visible from the admin dashboard, not just the device's own
+                # local audit log.
+                loc, loc_status = loc_result.get("value", (None, "no_result"))
+                body["location_status"] = loc_status
+                if loc:
+                    body["location"] = loc
 
         resp = requests.post(f"{server_url}/device_poll.php", json=body, headers=headers, timeout=15)
 

@@ -288,6 +288,12 @@ $allDevicesJson = json_encode($allDevices, JSON_HEX_TAG | JSON_HEX_APOS | JSON_H
                     <tr><th>Device Status</th><td id="device-status-cell"><?= e((string)($user['device_status'] ?? 'healthy')) ?></td></tr>
                     <tr><th>Last Seen</th><td><?= e((string)($user['last_seen'] ?? 'Never')) ?></td></tr>
                     <tr><th>Location</th><td><?= e((string)($user['location_label'] ?? 'No location yet')) ?></td></tr>
+                    <?php if ($device && empty($user['location_lat']) && !empty($device['last_location_status']) && $device['last_location_status'] !== 'ok'): ?>
+                        <tr>
+                            <th>Location Diagnostic</th>
+                            <td><?= e(describe_location_status((string)$device['last_location_status'])) ?></td>
+                        </tr>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </div>

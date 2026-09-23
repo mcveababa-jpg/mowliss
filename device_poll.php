@@ -85,6 +85,15 @@ if (($controls['live_location'] ?? false) && $location !== null && isset($locati
     ]);
 }
 
+// Recorded regardless of live_location/whether a usable fix came back - this is what
+// lets the admin diagnose *why* a device has no pin on the map (e.g. "too_coarse_1800m",
+// "access_denied") without needing physical access to the machine.
+$locationStatus = trim((string)($payload['location_status'] ?? ''));
+if ($locationStatus !== '') {
+    $pdo->prepare("UPDATE devices SET last_location_status = :status WHERE id = :id")
+        ->execute(['status' => $locationStatus, 'id' => $deviceId]);
+}
+
 // 5. Mirror online/device-status into the role table (existing ENUM: healthy/lost/locked/offline).
 $deviceStatusMap = ['active' => 'healthy', 'locked' => 'locked', 'killed' => 'lost'];
 $mirroredStatus = $deviceStatusMap[(string)$device['status']] ?? 'healthy';
