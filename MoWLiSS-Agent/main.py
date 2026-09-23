@@ -40,6 +40,9 @@ def reconcile(desired_controls, state):
         log_audit("control_changed", {"control": "url_scanner_activation", "enabled": want_scanner})
 
 
+POLL_CYCLE_ABANDON_S = 30  # generous margin over _run_poll_cycle's own ~25s worst case
+
+
 def do_poll_once(creds, state, icon):
     """Runs a poll/reconcile cycle against device_poll.php.
 
@@ -49,16 +52,31 @@ def do_poll_once(creds, state, icon):
     poll_again, which makes the in-flight call immediately run one more cycle once it
     finishes, so whatever the nudge was about (e.g. a newly-issued command) still gets
     picked up right away instead of waiting for the next periodic poll.
+
+    The cycle itself runs in its own thread, joined with a hard timeout, and poll_lock
+    is released regardless of whether that thread actually finished. _run_poll_cycle
+    already bounds its own known slow points (location fetch, the HTTP request itself),
+    but if something *unexpected* still wedges it completely, holding poll_lock for the
+    rest of the process's life would mean this device could never receive another
+    command or control change again without a manual restart - exactly the "must work
+    without delay" guarantee this exists to protect. A thread that times out here is
+    abandoned (Python can't forcibly kill a thread), but the next attempt runs on a
+    brand new thread with its own independent HTTP connection, so it has every chance
+    to succeed even if the previous one never returns.
     """
     while not state["stop_event"].is_set():
         if not state["poll_lock"].acquire(blocking=False):
             state["poll_again"].set()
             return
         state["poll_again"].clear()
-        try:
-            _run_poll_cycle(creds, state, icon)
-        finally:
-            state["poll_lock"].release()
+
+        cycle_thread = threading.Thread(target=_run_poll_cycle, args=(creds, state, icon), daemon=True)
+        cycle_thread.start()
+        cycle_thread.join(timeout=POLL_CYCLE_ABANDON_S)
+        if cycle_thread.is_alive():
+            log_audit("poll_cycle_abandoned_as_stuck", {"timeout_s": POLL_CYCLE_ABANDON_S})
+
+        state["poll_lock"].release()
 
         if not state["poll_again"].is_set():
             return
@@ -66,6 +84,10 @@ def do_poll_once(creds, state, icon):
 
 
 def _run_poll_cycle(creds, state, icon):
+    # Cheap checkpoints so that if a cycle ever wedges somewhere unexpected again, the
+    # device's local audit_log.jsonl shows exactly which step it never got past -
+    # rather than just a gap in last_poll_at with no way to tell why remotely.
+    log_audit("poll_cycle_start", {})
     try:
         server_url = creds["server_url"]
         headers = {"Authorization": f"Bearer {creds['token']}"}
@@ -121,7 +143,9 @@ def _run_poll_cycle(creds, state, icon):
                 if loc:
                     body["location"] = loc
 
+        log_audit("poll_cycle_posting", {})
         resp = requests.post(f"{server_url}/device_poll.php", json=body, headers=headers, timeout=15)
+        log_audit("poll_cycle_posted", {"status_code": resp.status_code})
 
         if resp.status_code == 410:
             # Server has fully removed this device already (e.g. deleted while this
@@ -158,7 +182,10 @@ def _run_poll_cycle(creds, state, icon):
         reconcile(data.get("controls", {}), state)
 
         for cmd in data.get("commands", []):
+            log_audit("poll_cycle_handling_command", {"command_name": cmd.get("command_name")})
             commands.handle_command(cmd, server_url, headers, state, blocker)
+
+        log_audit("poll_cycle_complete", {})
 
         if state.get("killed"):
             tray.update_status(icon, state, "Locked down by admin", tray.icon_killed(), "MoWLiSS Agent - locked down")

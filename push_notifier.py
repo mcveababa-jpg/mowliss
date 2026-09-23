@@ -95,11 +95,17 @@ def _query_pending_device_ids():
 
 
 def _query_control_snapshot():
+    # Compares the actual enabled value, not updated_at: that column is a plain
+    # TIMESTAMP (whole-second precision), so two rapid toggles of the same control
+    # within the same second - e.g. an admin clicking App Turn Off then immediately
+    # App Turn On - can land on an identical updated_at and make the second change
+    # invisible to timestamp-based diffing, even though the on/off state genuinely
+    # changed. Comparing enabled directly has no such collision window.
     conn = db_connect()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT device_id, control_name, updated_at FROM device_controls")
-            return {(row["device_id"], row["control_name"]): str(row["updated_at"]) for row in cur.fetchall()}
+            cur.execute("SELECT device_id, control_name, enabled FROM device_controls")
+            return {(row["device_id"], row["control_name"]): row["enabled"] for row in cur.fetchall()}
     finally:
         conn.close()
 
