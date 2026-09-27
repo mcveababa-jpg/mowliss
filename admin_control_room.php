@@ -195,41 +195,53 @@ $recentEvents = $recentEvents ?? [];
 $flashMessage = $_SESSION['flash_message'] ?? '';
 unset($_SESSION['flash_message']);
 
-// Build a list of all devices (students, staff, foremen) that have coordinates so the admin map can show them all.
+// Build a list of every currently-enrolled device (students, staff, foremen) so the
+// admin map can show them all - driven by the `devices` table (who actually has an
+// agent registered), not by the role tables' location columns directly. Querying
+// location columns alone was wrong both ways: an account with no device at all could
+// still surface a marker if a location value ever ended up on its row some other way
+// (false information), while a genuinely enrolled device that simply hadn't reported
+// a fix yet was invisible. Every enrolled device is included here regardless of
+// whether it has a location; dump_devices_json.php (the live 2s refresh) mirrors this
+// exact query so the initial render and every refresh after it behave identically.
 $allDevices = [];
 $roleTables = [
-    'students' => 'students',
+    'student' => 'students',
     'staff' => 'staff',
-    'foremen' => 'foremen',
+    'foreman' => 'foremen',
 ];
 
-foreach ($roleTables as $roleName => $tableName) {
+foreach ($roleTables as $ownerRole => $tableName) {
     try {
-    // Select all columns and handle missing name fields in PHP to avoid column-not-found errors
-    $stmt = $pdo->prepare("SELECT * FROM {$tableName} WHERE location_lat IS NOT NULL AND location_lat != '' AND location_lng IS NOT NULL AND location_lng != ''");
-    $stmt->execute();
-    $rows = $stmt->fetchAll();
+        // Select all columns and handle missing name fields in PHP to avoid column-not-found errors
+        $stmt = $pdo->prepare(
+            "SELECT d.device_name, d.status AS device_reg_status, d.last_poll_at, r.*
+             FROM devices d
+             JOIN `{$tableName}` r ON r.id = d.owner_id
+             WHERE d.owner_role = :owner_role AND d.status != 'deleted'"
+        );
+        $stmt->execute(['owner_role' => $ownerRole]);
+        $rows = $stmt->fetchAll();
 
-    foreach ($rows as $r) {
+        foreach ($rows as $r) {
             $display = trim((string)($r['full_name'] ?? '') . ' ' . (string)($r['first_name'] ?? '') . ' ' . (string)($r['last_name'] ?? ''));
             if ($display === '') {
-                $display = sprintf('%s-%s', $roleName, (string)($r['id'] ?? ''));
+                $display = sprintf('%s-%s', $tableName, (string)($r['id'] ?? ''));
             }
 
-            $lat = isset($r['location_lat']) ? (float)$r['location_lat'] : null;
-            $lng = isset($r['location_lng']) ? (float)$r['location_lng'] : null;
+            $lat = ($r['location_lat'] ?? '') !== '' ? (float)$r['location_lat'] : null;
+            $lng = ($r['location_lng'] ?? '') !== '' ? (float)$r['location_lng'] : null;
 
-            if ($lat !== null && $lng !== null) {
-                $allDevices[] = [
-                    'role' => $roleName,
-                    'id' => (int)$r['id'],
-                    'name' => $display,
-                    'label' => (string)($r['location_label'] ?? ''),
-                    'device_status' => (string)($r['device_status'] ?? ''),
-                    'lat' => $lat,
-                    'lng' => $lng,
-                ];
-            }
+            $allDevices[] = [
+                'role' => $tableName,
+                'id' => (int)$r['id'],
+                'name' => $display,
+                'label' => (string)($r['location_label'] ?? ''),
+                'device_status' => (string)($r['device_status'] ?? 'healthy'),
+                'has_location' => $lat !== null && $lng !== null,
+                'lat' => $lat,
+                'lng' => $lng,
+            ];
         }
     } catch (Throwable $ex) {
         // ignore per-table failures but continue
@@ -343,6 +355,7 @@ $allDevicesJson = json_encode($allDevices, JSON_HEX_TAG | JSON_HEX_APOS | JSON_H
         <h2>Live Devices Map</h2>
         <p class="small">Auto-refreshes every 2 seconds while this page is open. <span id="map-last-updated"></span></p>
         <div id="admin-map" style="width:100%; height:480px; border-radius:12px; overflow:hidden;"></div>
+        <div id="devices-without-location" class="small" style="margin-top:10px;"></div>
         <script>
             (function(){
                 const initialDevices = <?= $allDevicesJson ?> || [];
@@ -362,6 +375,7 @@ $allDevicesJson = json_encode($allDevices, JSON_HEX_TAG | JSON_HEX_APOS | JSON_H
                 function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
                 const markers = {}; // key "role:id" -> L.marker
+                const noLocationEl = document.getElementById('devices-without-location');
                 let hasFitBoundsOnce = false;
 
                 function popupHtml(d) {
@@ -374,22 +388,46 @@ $allDevicesJson = json_encode($allDevices, JSON_HEX_TAG | JSON_HEX_APOS | JSON_H
                 function renderDevices(devices) {
                     if (!Array.isArray(devices)) return;
 
+                    // Every entry here is a genuinely enrolled device (dump_devices_json.php
+                    // is driven by the devices table, not by whoever happens to have a
+                    // location value) - one with has_location:false is real and registered,
+                    // it just has no fix yet. It must never get a fabricated marker position,
+                    // but it also must not silently disappear as if it didn't exist.
+                    const withLocation = devices.filter(d => d.has_location && !isNaN(parseFloat(d.lat)) && !isNaN(parseFloat(d.lng)));
+                    const withoutLocation = devices.filter(d => !d.has_location);
+
+                    if (noLocationEl) {
+                        if (withoutLocation.length === 0) {
+                            noLocationEl.textContent = '';
+                        } else {
+                            const names = withoutLocation.map(d => escapeHtml(d.name) + ' (' + escapeHtml(d.role) + ')').join(', ');
+                            noLocationEl.innerHTML = '<strong>' + withoutLocation.length + ' registered device(s) with no location fix yet:</strong> ' + names;
+                        }
+                    }
+
                     if (devices.length === 0 && Object.keys(markers).length === 0) {
                         mapEl.querySelectorAll('.map-placeholder').forEach(el => el.remove());
                         const placeholder = document.createElement('div');
                         placeholder.className = 'map-placeholder';
-                        placeholder.textContent = 'No live locations available for any devices yet.';
+                        placeholder.textContent = 'No devices are currently enrolled.';
                         mapEl.appendChild(placeholder);
                         return;
+                    }
+
+                    mapEl.querySelectorAll('.map-placeholder').forEach(el => el.remove());
+                    if (withLocation.length === 0) {
+                        const placeholder = document.createElement('div');
+                        placeholder.className = 'map-placeholder';
+                        placeholder.textContent = 'No enrolled device has reported a location fix yet.';
+                        mapEl.appendChild(placeholder);
                     }
 
                     const seenKeys = new Set();
                     const bounds = [];
 
-                    devices.forEach(d => {
+                    withLocation.forEach(d => {
                         const lat = parseFloat(d.lat);
                         const lng = parseFloat(d.lng);
-                        if (isNaN(lat) || isNaN(lng)) return;
 
                         const key = d.role + ':' + d.id;
                         seenKeys.add(key);
