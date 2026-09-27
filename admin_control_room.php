@@ -26,7 +26,10 @@ if ($_SESSION['user_status'] !== 'admin') {
 }
 
 $ownerRoleMap = ['students' => 'student', 'staff' => 'staff', 'foremen' => 'foreman'];
-$persistentControls = ['website_blocker', 'url_scanner_activation', 'live_location'];
+// "Persistent" (the control_name) is one of these simple on/off toggles like any other -
+// $persistentControls here just means "stored directly as a device_controls row",
+// unrelated to what that particular control happens to be named.
+$persistentControls = ['website_blocker', 'url_scanner_activation', 'live_location', 'persistent'];
 $oneShotCommands = ['remote_lock', 'app_delete', 'app_killswitch'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -150,6 +153,7 @@ $controlActions = [
     'app_turn_on' => 'App Turn On',
     'app_delete' => 'App Delete',
     'app_killswitch' => 'App Kill Switch',
+    'persistent' => 'Persistent',
 ];
 
 $ownerRole = $ownerRoleMap[$role];
@@ -171,6 +175,13 @@ if ($device) {
     // app_turn_off / app_turn_on both reflect the single agent_enabled toggle.
     $controlStates['app_turn_on'] = (int)($controlStates['agent_enabled'] ?? 1);
     $controlStates['app_turn_off'] = $controlStates['app_turn_on'] ? 0 : 1;
+
+    // Persistent defaults ON for every enrolled device (no admin action required to
+    // activate it) - it only shows OFF once an admin explicitly disables it, same
+    // default-true pattern as agent_enabled above. main.py's reconcile() defaults it
+    // the same way, so a device with no row for it yet behaves identically to one an
+    // admin has explicitly turned on.
+    $controlStates['persistent'] = (int)($controlStates['persistent'] ?? 1);
 
     foreach ($oneShotCommands as $cmdName) {
         $cmdStmt = $pdo->prepare(

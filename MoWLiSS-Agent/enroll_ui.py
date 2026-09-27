@@ -37,7 +37,10 @@ def _show_consent_screen(owner_display_name):
         f"    {owner_display_name}\n\n"
         "A tray icon will always be visible while the agent is running, showing its "
         "current status. You can open its local activity log at any time from the tray "
-        "menu. Only an administrator can remove this enrollment."
+        "menu. Only an administrator can remove this enrollment.\n\n"
+        "By default the agent runs in Persistent mode: it cannot be quit from the tray "
+        "menu, and starts automatically when you log in. An administrator can turn this "
+        "off remotely if needed."
     )
     tk.Label(win, text=message, wraplength=420, justify="left").pack(padx=20)
     tk.Button(win, text="Got it", width=12, command=win.destroy).pack(pady=20)

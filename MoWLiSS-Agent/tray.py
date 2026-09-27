@@ -65,6 +65,15 @@ def build_tray(state, on_quit):
     def server_text(item):
         return f"Server: {state.get('server_url', '')}"
 
+    def persistent_text(item):
+        return "Mode: Persistent (admin-managed)" if state.get("persistent", True) else "Mode: Persistent off"
+
+    def quit_text(item):
+        return "Quit (disabled by admin)" if state.get("persistent", True) else "Quit"
+
+    def quit_enabled(item):
+        return not state.get("persistent", True)
+
     icon = pystray.Icon(
         APP_NAME,
         icon_offline(),
@@ -74,8 +83,9 @@ def build_tray(state, on_quit):
             pystray.MenuItem(status_text, None, enabled=False),
             pystray.MenuItem(enrollment_text, None, enabled=False),
             pystray.MenuItem(server_text, None, enabled=False),
+            pystray.MenuItem(persistent_text, None, enabled=False),
             pystray.MenuItem("View local audit log", open_audit_log),
-            pystray.MenuItem("Quit", lambda icon, item: on_quit(icon, item)),
+            pystray.MenuItem(quit_text, lambda icon, item: on_quit(icon, item), enabled=quit_enabled),
         ),
     )
     return icon

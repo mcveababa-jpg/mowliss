@@ -20,6 +20,12 @@ def reconcile(desired_controls, state):
     website_blocker = desired_controls.get("website_blocker", False)
     url_scanner = desired_controls.get("url_scanner_activation", False)
     state["live_location"] = desired_controls.get("live_location", False)
+    # Defaults True - matches admin_control_room.php/device_activity_poll.php, which
+    # both treat a device with no explicit row for this yet as already persistent.
+    # state itself is initialized to True in main() too, so a device that has never
+    # completed a single poll (no server data at all yet) still can't be quit by the
+    # end user - persistence starts from first launch, not from first successful poll.
+    state["persistent"] = desired_controls.get("persistent", True)
 
     if state.get("killed"):
         # Forced maximum restriction until an admin clears it server-side -
@@ -224,6 +230,12 @@ def poll_loop(creds, state, icon):
 
 
 def on_quit(icon, item, state):
+    # tray.py already disables the Quit menu item while persistent is on, but that's a
+    # UI-level gate - the action itself must refuse too, not just rely on the menu
+    # being unclickable, in case anything else ever ends up calling this.
+    if state.get("persistent", True):
+        log_audit("quit_blocked_persistent", {})
+        return
     log_audit("agent_quit", {})
     state["stop_event"].set()
     icon.stop()
@@ -246,6 +258,7 @@ def main():
         "stop_event": threading.Event(),
         "killed": False,
         "live_location": False,
+        "persistent": True,  # see reconcile()'s comment - on from first launch, not just from first successful poll
         "poll_lock": threading.Lock(),
         "poll_again": threading.Event(),
         "location_thread": None,

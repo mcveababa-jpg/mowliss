@@ -119,13 +119,24 @@ function ensure_database_schema(): void
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS `device_controls` (
             `device_id` INT NOT NULL,
-            `control_name` ENUM('website_blocker','url_scanner_activation','live_location','agent_enabled') NOT NULL,
+            `control_name` ENUM('website_blocker','url_scanner_activation','live_location','agent_enabled','persistent') NOT NULL,
             `enabled` TINYINT(1) NOT NULL DEFAULT 0,
             `updated_by_admin_id` INT NULL,
             `updated_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (`device_id`, `control_name`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
+
+    // An existing database's device_controls.control_name ENUM predates 'persistent' -
+    // widen it rather than recreating the table.
+    try {
+        $pdo->exec(
+            "ALTER TABLE device_controls MODIFY COLUMN control_name
+             ENUM('website_blocker','url_scanner_activation','live_location','agent_enabled','persistent') NOT NULL"
+        );
+    } catch (PDOException $e) {
+        // ignore; a fresh install already has the widened ENUM from the CREATE TABLE above
+    }
 
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS `device_commands` (
@@ -437,6 +448,7 @@ function describe_device_event(array $row): string
         'app_turn_on' => 'App Turn On',
         'app_delete' => 'App Delete',
         'app_killswitch' => 'App Kill Switch',
+        'persistent' => 'Persistent',
     ];
 
     $detail = json_decode((string)($row['event_detail'] ?? ''), true);

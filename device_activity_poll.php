@@ -33,6 +33,9 @@ foreach ($ctrlStmt->fetchAll() as $row) {
 }
 $controls['app_turn_on'] = (int)($controls['agent_enabled'] ?? 1);
 $controls['app_turn_off'] = $controls['app_turn_on'] ? 0 : 1;
+// Same default-ON behavior as admin_control_room.php's initial render and the agent's
+// own reconcile() - a device with no row for it yet is treated as Persistent already.
+$controls['persistent'] = (int)($controls['persistent'] ?? 1);
 
 $commands = [];
 foreach ($oneShotCommands as $cmdName) {
