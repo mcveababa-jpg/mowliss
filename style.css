@@ -367,6 +367,56 @@ select option {
     color: #8a5a00;
 }
 
+.status-badge.attended {
+    background: rgba(61, 130, 255, 0.14);
+    border: 1px solid rgba(30, 90, 200, 0.4);
+    color: #1e4fa0;
+}
+
+.history-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 12px;
+}
+
+.history-item {
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: #f5f5fa;
+    border: 1px solid rgba(51, 52, 143, 0.1);
+}
+
+.history-item-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.history-item-subject {
+    font-weight: bold;
+    color: #232360;
+}
+
+.history-item-meta {
+    color: #5b647a;
+    margin: 4px 0 8px;
+}
+
+.history-item-message {
+    color: #333;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.history-empty {
+    color: #5b647a;
+    font-style: italic;
+}
+
 .inline-form {
     display: inline-block;
     vertical-align: top;

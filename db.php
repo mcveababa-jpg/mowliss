@@ -194,6 +194,14 @@ function ensure_database_schema(): void
         if (!in_array('origin', $chatReportsColumns, true)) {
             $pdo->exec("ALTER TABLE chat_reports ADD COLUMN origin ENUM('user','admin') NOT NULL DEFAULT 'user'");
         }
+
+        // Lets a reporter classify what kind of report this is (e.g. "Suspicious
+        // Activity" vs "Technical Support") so both the reporter's own history and
+        // admin's queue can show it, instead of every report looking the same until
+        // someone opens it and reads the free-text message.
+        if (!in_array('category', $chatReportsColumns, true)) {
+            $pdo->exec("ALTER TABLE chat_reports ADD COLUMN category VARCHAR(60) NULL DEFAULT NULL");
+        }
     } catch (PDOException $e) {
         // ignore; the columns will simply be missing and admin_tickets.php falls back gracefully
     }

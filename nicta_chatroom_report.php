@@ -20,18 +20,84 @@ $backPage = $backPageMap[$_SESSION['user_status']] ?? 'dashboard.php';
 
 $reportTitle = 'NICTA Chatroom Report';
 $reportCode = 'NICTA-STD-2026';
+$roomKey = 'NICTA';
+$categoryOptions = [
+    'Suspicious Activity',
+    'Cyber Bullying / Harassment',
+    'Spam or Scam',
+    'Technical Support Request',
+    'Other',
+];
+
+function ticket_status_label(PDO $pdo, int $reportId): string
+{
+    $stmt = $pdo->prepare('SELECT action FROM ticket_actions WHERE report_id = :rid ORDER BY id DESC LIMIT 1');
+    $stmt->execute(['rid' => $reportId]);
+    return match (strtolower((string)$stmt->fetchColumn())) {
+        'attended' => 'Attended',
+        'resolved' => 'Resolved',
+        'waiting' => 'Waiting',
+        default => 'New',
+    };
+}
+
+function status_badge_class(string $status): string
+{
+    return match ($status) {
+        'Resolved' => 'approved',
+        'Attended' => 'attended',
+        default => 'pending',
+    };
+}
+
+// Every number below is computed from real chat_reports/ticket_actions rows for this
+// room - never a hardcoded placeholder standing in for real activity.
+$roomReportsStmt = $pdo->prepare('SELECT id, submitter_role, submitter_id FROM chat_reports WHERE room = :room');
+$roomReportsStmt->execute(['room' => $roomKey]);
+$roomReportRows = $roomReportsStmt->fetchAll();
+
+$totalCount = count($roomReportRows);
+$resolvedCount = 0;
+$pendingCount = 0;
+$activeSubmitters = [];
+
+foreach ($roomReportRows as $rr) {
+    $status = ticket_status_label($pdo, (int)$rr['id']);
+    if ($status === 'Resolved') {
+        $resolvedCount++;
+    } else {
+        $pendingCount++;
+        $activeSubmitters[$rr['submitter_role'] . ':' . $rr['submitter_id']] = true;
+    }
+}
+
 $stats = [
-    ['label' => 'Active Rooms', 'value' => '12'],
-    ['label' => 'Flagged Issues', 'value' => '8'],
-    ['label' => 'Resolved', 'value' => '6'],
-    ['label' => 'Pending', 'value' => '2'],
+    ['label' => 'Active Reporters', 'value' => (string)count($activeSubmitters)],
+    ['label' => 'Total Reports', 'value' => (string)$totalCount],
+    ['label' => 'Resolved', 'value' => (string)$resolvedCount],
+    ['label' => 'Pending', 'value' => (string)$pendingCount],
 ];
-$items = [
-    ['label' => 'Classroom Safety', 'value' => 'Clear'],
-    ['label' => 'Cyber Awareness', 'value' => 'Needs review'],
-    ['label' => 'Student Alerts', 'value' => 'Escalated'],
-    ['label' => 'Spam Activity', 'value' => 'Blocked'],
-];
+
+// The current user's own report history to this room specifically - what they sent,
+// when, what type, and its current status - so they can see exactly what they last
+// reported and whether it's been looked at, instead of submitting into a void.
+$historyStmt = $pdo->prepare(
+    'SELECT id, subject, category, message, created_at
+     FROM chat_reports
+     WHERE room = :room AND submitter_role = :role AND submitter_id = :uid
+     ORDER BY id DESC
+     LIMIT 20'
+);
+$historyStmt->execute([
+    'room' => $roomKey,
+    'role' => (string)$_SESSION['user_status'],
+    'uid' => (int)$_SESSION['user_id'],
+]);
+$myHistory = $historyStmt->fetchAll();
+foreach ($myHistory as &$h) {
+    $h['status'] = ticket_status_label($pdo, (int)$h['id']);
+}
+unset($h);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -40,7 +106,7 @@ $items = [
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= e($reportTitle) ?> | MoWLiSS</title>
-    <link rel="stylesheet" href="style.css?v=7">
+    <link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
 <?php render_site_header(); ?>
@@ -74,28 +140,47 @@ $items = [
         </div>
 
         <div class="dashboard-card">
-            <h2>Chatroom Summary</h2>
-            <ul class="report-list">
-                <?php foreach ($items as $item): ?>
-                    <li>
-                        <span><?= e($item['label']) ?></span>
-                        <strong><?= e($item['value']) ?></strong>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
+            <h2>Your Report History</h2>
+            <?php if (empty($myHistory)): ?>
+                <p class="history-empty">You haven't reported anything to NICTA yet. Use the form below to submit your first report.</p>
+            <?php else: ?>
+                <ul class="history-list">
+                    <?php foreach ($myHistory as $h): ?>
+                        <li class="history-item">
+                            <div class="history-item-top">
+                                <span class="history-item-subject"><?= e((string)$h['subject']) ?></span>
+                                <span class="status-badge <?= e(status_badge_class($h['status'])) ?>"><?= e($h['status']) ?></span>
+                            </div>
+                            <div class="history-item-meta small">
+                                Last reported <?= e((string)$h['created_at']) ?>
+                                <?php if (!empty($h['category'])): ?> &middot; <?= e((string)$h['category']) ?><?php endif; ?>
+                            </div>
+                            <div class="history-item-message"><?= e((string)$h['message']) ?></div>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            <?php endif; ?>
         </div>
 
         <div class="dashboard-card">
             <h2>Submit a Report</h2>
             <form class="report-form" method="POST" action="submit_report.php">
-                <input type="hidden" name="room" value="NICTA">
+                <input type="hidden" name="room" value="<?= e($roomKey) ?>">
                 <div class="form-group">
-                    <label for="room-name">Room / Chat ID</label>
-                    <input id="room-name" type="text" value="NICTA Room 01" readonly>
+                    <label for="report-subject">Subject</label>
+                    <input id="report-subject" type="text" name="subject" placeholder="Short summary of the issue" required>
+                </div>
+                <div class="form-group">
+                    <label for="report-category">Message Type</label>
+                    <select id="report-category" name="category">
+                        <?php foreach ($categoryOptions as $opt): ?>
+                            <option value="<?= e($opt) ?>"><?= e($opt) ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label for="report-message">Issue Details</label>
-                    <textarea id="report-message" name="message" rows="5" placeholder="Describe suspicious activity, misuse, or support request..."></textarea>
+                    <textarea id="report-message" name="message" rows="5" placeholder="Describe suspicious activity, misuse, or support request..." required></textarea>
                 </div>
                 <div class="form-actions">
                     <button type="submit" class="btn inline-btn">Submit Report</button>
