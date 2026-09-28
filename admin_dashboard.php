@@ -63,6 +63,47 @@ if ($_SESSION['user_status'] !== 'admin') {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = postString('action');
 
+    if ($action === 'delete_user') {
+        $role = postString('role');
+        $userId = (int)postString('user_id');
+        $roleMap = [
+            'students' => ['table' => 'students', 'owner_role' => 'student'],
+            'staff' => ['table' => 'staff', 'owner_role' => 'staff'],
+            'foremen' => ['table' => 'foremen', 'owner_role' => 'foreman'],
+        ];
+
+        if (isset($roleMap[$role]) && $userId > 0) {
+            $table = $roleMap[$role]['table'];
+            $ownerRole = $roleMap[$role]['owner_role'];
+
+            // A soft delete (status flip), not DELETE FROM - chat_reports, ticket_actions,
+            // and device_commands/device_events all keep referencing a real row, so past
+            // history stays readable instead of turning into orphaned IDs. is_approved is
+            // cleared alongside account_status so a re-used "approved" flag from before
+            // deletion can never let login.php's checks fall through and admit them back in.
+            $pdo->prepare(
+                "UPDATE `{$table}` SET account_status = 'deleted', is_approved = 0 WHERE id = :id"
+            )->execute(['id' => $userId]);
+
+            // Retire any enrolled device the same way admin_control_room.php's own device
+            // lifecycle already treats removal - status = 'deleted' - so it stops being
+            // polled successfully (device_poll.php returns 410) instead of being left
+            // pointing at an account that no longer has a working login.
+            $deviceStmt = $pdo->prepare(
+                "SELECT id FROM devices WHERE owner_role = :r AND owner_id = :id AND status != 'deleted'"
+            );
+            $deviceStmt->execute(['r' => $ownerRole, 'id' => $userId]);
+            foreach ($deviceStmt->fetchAll() as $deviceRow) {
+                $pdo->prepare("UPDATE devices SET status = 'deleted' WHERE id = :id")
+                    ->execute(['id' => (int)$deviceRow['id']]);
+            }
+
+            $_SESSION['flash_message'] = 'User account deleted and any enrolled device retired.';
+        }
+
+        redirect('admin_dashboard.php');
+    }
+
     if ($action === 'approve_user' || $action === 'wait_user' || $action === 'decline_user') {
        $role = postString('role');
        $userId = (int)postString('user_id');
@@ -219,7 +260,10 @@ $usersByCategory = [];
 $selectedMapUser = null;
 
 foreach ($roleDefinitions as $role => $config) {
-    $rows = $pdo->query("SELECT * FROM {$role} ORDER BY id DESC")->fetchAll();
+    // Deleted accounts are excluded from view here the same way devices.status =
+    // 'deleted' is already filtered out everywhere else - the row still exists (so
+    // history stays intact) but is no longer part of the active management list.
+    $rows = $pdo->query("SELECT * FROM {$role} WHERE account_status != 'deleted' ORDER BY id DESC")->fetchAll();
     $group = [];
 
     foreach ($rows as $row) {
@@ -469,6 +513,12 @@ if (!empty($selectedMapUser['location_lat']) && !empty($selectedMapUser['locatio
                                                    <input type="hidden" name="role" value="<?= e($row['role']) ?>">
                                                    <input type="hidden" name="user_id" value="<?= (int)$row['id'] ?>">
                                                    <button type="submit" class="btn small-btn btn-decline">Decline</button>
+                                               </form>
+                                               <form method="POST" class="inline-form" onsubmit="return confirm('Permanently delete this account? This unenrolls their device and blocks login. Their report history is kept for records but the account cannot be restored from here.');">
+                                                   <input type="hidden" name="action" value="delete_user">
+                                                   <input type="hidden" name="role" value="<?= e($row['role']) ?>">
+                                                   <input type="hidden" name="user_id" value="<?= (int)$row['id'] ?>">
+                                                   <button type="submit" class="btn small-btn btn-delete">Delete</button>
                                                </form>
                                                <a class="btn small-btn btn-map" href="admin_control_room.php?role=<?= e($row['role']) ?>&user_id=<?= (int)$row['id'] ?>">Control Room</a>
                                                <form method="POST" class="inline-form map-form">

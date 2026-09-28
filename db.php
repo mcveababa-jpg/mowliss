@@ -323,7 +323,7 @@ function ensure_database_schema(): void
                 'is_approved' => 'TINYINT(1) NOT NULL DEFAULT 0',
                 'approved_by' => 'VARCHAR(150) NULL',
                 'approved_at' => 'TIMESTAMP NULL',
-                'account_status' => "ENUM('pending','approved','waiting','declined') NOT NULL DEFAULT 'pending'",
+                'account_status' => "ENUM('pending','approved','waiting','declined','deleted') NOT NULL DEFAULT 'pending'",
                 'is_online' => 'TINYINT(1) NOT NULL DEFAULT 0',
                 'last_seen' => 'TIMESTAMP NULL',
                 'device_status' => "ENUM('healthy','lost','locked','offline') NOT NULL DEFAULT 'healthy'",
@@ -398,6 +398,24 @@ function ensure_database_schema(): void
                     // Duplicate values already present (pre-existing bad data) - can't add the
                     // constraint until those are resolved by hand; don't fail startup over it.
                 }
+            }
+        }
+
+        // account_status's ENUM predates 'deleted' on any existing database (both the
+        // db/init.sql Docker path and this generic fallback originally only defined
+        // pending/approved/waiting/declined) - widen it rather than recreating the
+        // table. Deleting an account is deliberately a status flip, not a real DELETE
+        // FROM: chat_reports/ticket_actions/device_commands keep referencing a valid
+        // row so that history stays intact and readable, exactly like devices.status
+        // already uses 'deleted' as a status rather than removing the device row.
+        if (in_array($table, ['students', 'staff', 'foremen'], true)) {
+            try {
+                $pdo->exec(
+                    "ALTER TABLE `{$table}` MODIFY COLUMN account_status
+                     ENUM('pending','approved','waiting','declined','deleted') NOT NULL DEFAULT 'pending'"
+                );
+            } catch (PDOException $e) {
+                // ignore; a fresh install already has the widened ENUM
             }
         }
     }

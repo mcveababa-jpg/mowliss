@@ -455,6 +455,11 @@ select option {
     color: var(--white);
 }
 
+.btn-delete {
+    background: linear-gradient(90deg, #b32020, #d13a3a);
+    color: #fff;
+}
+
 .mini-input {
     width: 100px;
     padding: 8px 10px;

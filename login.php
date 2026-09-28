@@ -223,7 +223,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $accountState = strtolower((string)($user['account_status'] ?? ''));
                 $isApproved = (bool)((int)($user['is_approved'] ?? 0));
 
-                if ($accountState === 'declined') {
+                if ($accountState === 'deleted') {
+                    // Checked first and explicitly (not left to fall through the other
+                    // branches) - a deleted account may still have is_approved = 1 left
+                    // over from before it was removed, which would otherwise let it
+                    // silently skip every other check below and log in normally.
+                    logAttempt($pdo, $status, $identifier, false, 'Account deleted');
+                    $error = 'This account has been removed by the admin.';
+                } elseif ($accountState === 'declined') {
                     logAttempt($pdo, $status, $identifier, false, 'Account declined');
                     $error = 'This account has been declined by the admin.';
                 } elseif ($accountState === 'waiting') {
